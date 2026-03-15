@@ -434,7 +434,11 @@ export default function App() {
       if (!id) continue
       map.set(id, inv)
     }
-    return Array.from(map.values())
+    return Array.from(map.values()).sort((a, b) => {
+      const ag = Number(a.total_gross || a.gross_total || 0)
+      const bg = Number(b.total_gross || b.gross_total || 0)
+      return ag - bg
+    })
   }
 
   async function bookPayment({ invoice, tx, payDate }) {
@@ -1122,6 +1126,7 @@ export default function App() {
                                   const queryMatch = !q || hay.includes(q)
                                   return invMatch || queryMatch
                                 })
+                                .sort((a, b) => Math.abs(a.amount) - Math.abs(b.amount))
                                 .slice(0, 50)
 
                               const selectedTx = transactions.find(t => t.id === selectedTxId) || null
