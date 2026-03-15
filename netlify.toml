@@ -1,6 +1,9 @@
 [build]
-  command = "npm install && npm run build"
-  publish = "dist"
+  command = "cd billomat/frontend && npm install && npm run build"
+  publish = "billomat/frontend/dist"
+
+[functions]
+  directory = "netlify/functions"
 
 [build.environment]
   NODE_VERSION = "18"
