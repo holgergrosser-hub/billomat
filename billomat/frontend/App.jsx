@@ -72,12 +72,14 @@ function buildMatrix(invoices) {
     const m = parseInt(parts[1], 10) - 1
     if (!matrix[y] || m < 0 || m > 11) return
 
+    const s = inv.status
+    if (s === 'CANCELLED') return
+
     const net = parseFloat(inv.total_net || inv.net_total || 0)
     const gross = parseFloat(inv.total_gross || inv.gross_total || 0)
     matrix[y][m].net += net
     matrix[y][m].gross += gross
     matrix[y][m].count++
-    const s = inv.status
     if (s === 'PAID') matrix[y][m].paid += net
     else if (s === 'OPEN') matrix[y][m].open += net
     else if (s === 'OVERDUE') matrix[y][m].overdue += net
@@ -262,6 +264,10 @@ export default function App() {
     }
     return { year: y, net, paid, open, overdue, count }
   })
+
+  const yearSumCards = yearlyTable
+    .filter(r => r.year <= thisYear)
+    .slice(-6)
 
   const CHART_OPTIONS = [
     { key: 'netto', label: 'Nettoumsatz', color: 'var(--accent)' },
@@ -538,6 +544,36 @@ export default function App() {
                         })}
                       </LineChart>
                     </ResponsiveContainer>
+                  </div>
+                )}
+
+                {/* Jahressummen – Summen-Darstellung */}
+                {yearSumCards.length > 0 && (
+                  <div style={{ marginTop: 20 }}>
+                    <div style={{
+                      fontFamily: 'var(--font-display)',
+                      fontWeight: 700,
+                      fontSize: 16,
+                      marginBottom: 12,
+                      color: 'var(--text)'
+                    }}>
+                      Jahresvergleich – Summen (netto)
+                    </div>
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                      gap: 12
+                    }}>
+                      {yearSumCards.map(row => (
+                        <KpiCard
+                          key={row.year}
+                          label={String(row.year)}
+                          value={fmt(row.net)}
+                          sub={`Offen: ${fmt(row.open)} • Bezahlt: ${fmt(row.paid)} • Überfällig: ${fmt(row.overdue)} • ${row.count} Rgn.`}
+                          color="var(--accent)"
+                        />
+                      ))}
+                    </div>
                   </div>
                 )}
               </>
