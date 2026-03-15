@@ -36,6 +36,32 @@ function parseGermanNumber(v) {
   return Number.isFinite(n) ? n : 0
 }
 
+function toIsoDateFromSparkasse(value) {
+  const s = String(value || '').trim()
+  if (!s) return ''
+
+  // YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
+
+  // DD.MM.YYYY
+  let m = s.match(/^(\d{2})\.(\d{2})\.(\d{4})$/)
+  if (m) {
+    const [, dd, mm, yyyy] = m
+    return `${yyyy}-${mm}-${dd}`
+  }
+
+  // DD.MM.YY (Sparkasse often uses 2-digit year)
+  m = s.match(/^(\d{2})\.(\d{2})\.(\d{2})$/)
+  if (m) {
+    const [, dd, mm, yy] = m
+    const y = Number(yy)
+    const yyyy = (y <= 69 ? 2000 + y : 1900 + y)
+    return `${yyyy}-${mm}-${dd}`
+  }
+
+  return ''
+}
+
 function detectDelimiter(line) {
   const semi = (line.match(/;/g) || []).length
   const comma = (line.match(/,/g) || []).length
@@ -90,13 +116,24 @@ function parseCsv(text) {
 
   const tx = []
   for (const r of dataRows) {
-    const date = (r[dateIdx] || r[valutaIdx] || '').trim()
+    const bookingDateRaw = (r[dateIdx] || '').trim()
+    const valutaDateRaw = (r[valutaIdx] || '').trim()
+    const dateIso = toIsoDateFromSparkasse(valutaDateRaw) || toIsoDateFromSparkasse(bookingDateRaw)
     const amount = parseGermanNumber(r[amountIdx])
     const purpose = (r[purposeIdx] || '').trim()
     const name = (r[nameIdx] || '').trim()
     const iban = (r[ibanIdx] || '').trim()
     if (!amount) continue
-    tx.push({ id: `${date}|${amount}|${purpose}`.slice(0, 140), date, amount, purpose, name, iban })
+    tx.push({
+      id: `${dateIso || bookingDateRaw || valutaDateRaw}|${amount}|${purpose}`.slice(0, 140),
+      dateIso,
+      bookingDateRaw,
+      valutaDateRaw,
+      amount,
+      purpose,
+      name,
+      iban
+    })
   }
   return tx
 }
@@ -1074,7 +1111,6 @@ export default function App() {
                               const client = String(inv.client_name || inv.client || '')
                               const gross = parseFloat(inv.total_gross || inv.gross_total || 0)
                               const st = String(inv.status || '').toUpperCase()
-                              const payDate = payDateByInvoiceId[invId] || isoDateToday()
                               const selectedTxId = matchByInvoiceId[invId] || ''
 
                               const q = String(txQuery || '').toLowerCase().trim()
@@ -1088,6 +1124,7 @@ export default function App() {
                                 .slice(0, 50)
 
                               const selectedTx = transactions.find(t => t.id === selectedTxId) || null
+                              const payDate = payDateByInvoiceId[invId] || selectedTx?.dateIso || isoDateToday()
 
                               return (
                                 <tr key={invId} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
@@ -1098,7 +1135,15 @@ export default function App() {
                                   <td style={{ padding: '10px 8px' }}>
                                     <select
                                       value={selectedTxId}
-                                      onChange={e => setMatchByInvoiceId(prev => ({ ...prev, [invId]: e.target.value }))}
+                                      onChange={e => {
+                                        const newTxId = e.target.value
+                                        setMatchByInvoiceId(prev => ({ ...prev, [invId]: newTxId }))
+
+                                        const txSel = transactions.find(t => t.id === newTxId) || null
+                                        if (txSel?.dateIso && !payDateByInvoiceId[invId]) {
+                                          setPayDateByInvoiceId(prev => ({ ...prev, [invId]: txSel.dateIso }))
+                                        }
+                                      }}
                                       style={{
                                         width: '100%', minWidth: 260,
                                         padding: '8px 10px', borderRadius: 8,
@@ -1109,7 +1154,7 @@ export default function App() {
                                       <option value="">— auswählen —</option>
                                       {suggested.map(t => (
                                         <option key={t.id} value={t.id}>
-                                          {t.date} • {fmt(Math.abs(t.amount))} • {(t.purpose || t.name || '').slice(0, 60)}
+                                          {(t.dateIso || t.valutaDateRaw || t.bookingDateRaw || '—')} • {fmt(Math.abs(t.amount))} • {(t.purpose || t.name || '').slice(0, 60)}
                                         </option>
                                       ))}
                                     </select>
