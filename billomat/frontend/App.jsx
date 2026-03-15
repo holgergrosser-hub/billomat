@@ -397,6 +397,7 @@ export default function App() {
   const [txQuery, setTxQuery] = useState('')
   const [matchByInvoiceId, setMatchByInvoiceId] = useState({})
   const [payDateByInvoiceId, setPayDateByInvoiceId] = useState({})
+  const [payDateTouchedByInvoiceId, setPayDateTouchedByInvoiceId] = useState({})
   const [bookingBusyId, setBookingBusyId] = useState(null)
 
   const kpis = invoices.length ? buildKPIs(invoices) : null
@@ -1140,7 +1141,8 @@ export default function App() {
                                         setMatchByInvoiceId(prev => ({ ...prev, [invId]: newTxId }))
 
                                         const txSel = transactions.find(t => t.id === newTxId) || null
-                                        if (txSel?.dateIso && !payDateByInvoiceId[invId]) {
+                                        const touched = Boolean(payDateTouchedByInvoiceId[invId])
+                                        if (txSel?.dateIso && !touched) {
                                           setPayDateByInvoiceId(prev => ({ ...prev, [invId]: txSel.dateIso }))
                                         }
                                       }}
@@ -1163,7 +1165,10 @@ export default function App() {
                                     <input
                                       type="date"
                                       value={payDate}
-                                      onChange={e => setPayDateByInvoiceId(prev => ({ ...prev, [invId]: e.target.value }))}
+                                      onChange={e => {
+                                        setPayDateTouchedByInvoiceId(prev => ({ ...prev, [invId]: true }))
+                                        setPayDateByInvoiceId(prev => ({ ...prev, [invId]: e.target.value }))
+                                      }}
                                       style={{
                                         padding: '8px 10px', borderRadius: 8,
                                         border: '1px solid var(--border)', background: 'var(--bg2)',
