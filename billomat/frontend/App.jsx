@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
-  ResponsiveContainer, LineChart, Line, ReferenceLine
+  ResponsiveContainer, LineChart, Line, ReferenceLine, LabelList
 } from 'recharts'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -17,6 +17,11 @@ const STATUS_COLORS = {
 
 function fmt(val) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(val || 0)
+}
+
+function fmtInt(val) {
+  if (val === null || val === undefined) return ''
+  return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 }).format(val || 0)
 }
 
 function getCurrentYear() { return new Date().getFullYear() }
@@ -105,6 +110,25 @@ function yearToChartData(matrix, year, thisYear, thisMonth) {
   })
 }
 
+function yearToCumulativeYoYData(matrix, year, thisYear, thisMonth) {
+  let cum = 0
+  let prevCum = 0
+
+  return MONTHS_DE.map((label, m) => {
+    const d = matrix[year]?.[m] || {}
+    const prev = matrix[year - 1]?.[m] || {}
+    cum += d.net || 0
+    prevCum += prev.net || 0
+
+    const isFuture = year > thisYear || (year === thisYear && m > thisMonth)
+    return {
+      name: `${label}. ${year}`,
+      jahr: isFuture ? null : Math.round(cum),
+      vorjahr: Math.round(prevCum)
+    }
+  })
+}
+
 // KPI summary
 function buildKPIs(invoices) {
   const now = new Date()
@@ -184,6 +208,25 @@ function CustomTooltip({ active, payload, label }) {
   )
 }
 
+function CumulativeTooltip({ active, payload, label }) {
+  if (!active || !payload?.length) return null
+  return (
+    <div style={{
+      background: 'var(--bg3)', border: '1px solid var(--border)',
+      borderRadius: 8, padding: '12px 16px', fontSize: 12
+    }}>
+      <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, marginBottom: 8, color: 'var(--text)' }}>
+        {label}
+      </div>
+      {payload.map(p => (
+        <div key={p.name} style={{ color: p.color, marginBottom: 4 }}>
+          {p.name}: <strong>{fmtInt(p.value)}</strong>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function YearTab({ year, active, onClick, isCurrentYear }) {
   return (
     <button onClick={onClick} style={{
@@ -227,6 +270,7 @@ export default function App() {
     : { matrix: {}, years: [], thisYear: getCurrentYear(), thisMonth: new Date().getMonth() }
 
   const chartData = years.length ? yearToChartData(matrix, selectedYear, thisYear, thisMonth) : []
+  const cumulativeYoYData = years.length ? yearToCumulativeYoYData(matrix, selectedYear, thisYear, thisMonth) : []
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -506,6 +550,51 @@ export default function App() {
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
+
+                {/* Kumulativer Jahresvergleich (Vorjahr vs Jahr) */}
+                {matrix[selectedYear] && matrix[selectedYear - 1] && (
+                  <div style={{
+                    background: 'var(--bg2)', border: '1px solid var(--border)',
+                    borderRadius: 16, padding: '24px 16px', marginTop: 20
+                  }}>
+                    <div style={{
+                      fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 14,
+                      color: 'var(--text-dim)', marginBottom: 20, paddingLeft: 8
+                    }}>
+                      {selectedYear - 1} zu {selectedYear} – kumuliert (netto)
+                    </div>
+                    <ResponsiveContainer width="100%" height={320}>
+                      <LineChart data={cumulativeYoYData} margin={{ top: 10, right: 20, left: 10, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+                        <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false}
+                          tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
+                        <Tooltip content={<CumulativeTooltip />} />
+                        <Line
+                          type="monotone"
+                          dataKey="jahr"
+                          name="Jahr"
+                          stroke="var(--accent2)"
+                          strokeWidth={3}
+                          dot={{ r: 3 }}
+                          connectNulls={false}
+                        >
+                          <LabelList dataKey="jahr" position="top" formatter={v => (v == null ? '' : fmtInt(v))} />
+                        </Line>
+                        <Line
+                          type="monotone"
+                          dataKey="vorjahr"
+                          name="Jahr (Vorjahr)"
+                          stroke="var(--text-muted)"
+                          strokeWidth={3}
+                          dot={false}
+                        >
+                          <LabelList dataKey="vorjahr" position="top" formatter={v => (v == null ? '' : fmtInt(v))} />
+                        </Line>
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
 
                 {/* Jahresvergleich – Line Chart */}
                 {years.filter(y => y <= thisYear).length > 1 && (
