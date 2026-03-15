@@ -11,12 +11,18 @@ Minimaler Netlify-Deploy für:
 - `BILLOMAT_ID` (z.B. `meinefirma`) **oder** `BILLOMAT_BASE_URL` (z.B. `https://meinefirma.billomat.net`)
 - `BILLOMAT_API_KEY`
 
+Für Buchungen (write):
+- `BILLOMAT_ADMIN_TOKEN` (Shared Secret, nur für Mitarbeiter-UI „Zahlung buchen“)
+
 Optional:
 - `BILLOMAT_FUTURE_YEARS=2`
 - `BILLOMAT_MOCK=1`
 
 ### Endpoint
 - `/.netlify/functions/billomat-invoices`
+
+Payment buchen:
+- `/.netlify/functions/billomat-book-payment` (POST, Header `x-admin-token`)
 
 Antwort:
 - `invoices`: Rechnungen

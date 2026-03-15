@@ -24,6 +24,95 @@ function fmtInt(val) {
   return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 }).format(val || 0)
 }
 
+function parseGermanNumber(v) {
+  if (v == null) return 0
+  const s = String(v).trim()
+  if (!s) return 0
+  const normalized = s
+    .replace(/\./g, '')
+    .replace(/\s/g, '')
+    .replace(',', '.')
+  const n = Number(normalized)
+  return Number.isFinite(n) ? n : 0
+}
+
+function detectDelimiter(line) {
+  const semi = (line.match(/;/g) || []).length
+  const comma = (line.match(/,/g) || []).length
+  const tab = (line.match(/\t/g) || []).length
+  if (tab >= semi && tab >= comma) return '\t'
+  if (semi >= comma) return ';'
+  return ','
+}
+
+function parseCsv(text) {
+  const rows = String(text || '')
+    .replace(/^\uFEFF/, '')
+    .split(/\r?\n/)
+    .filter(r => r.trim().length > 0)
+
+  if (!rows.length) return []
+  const delim = detectDelimiter(rows[0])
+
+  // Simple CSV split (Sparkasse exports are usually simple, no multiline fields)
+  const splitRow = (row) => {
+    const out = []
+    let cur = ''
+    let inQuotes = false
+    for (let i = 0; i < row.length; i++) {
+      const ch = row[i]
+      if (ch === '"') {
+        if (inQuotes && row[i + 1] === '"') { cur += '"'; i++; continue }
+        inQuotes = !inQuotes
+        continue
+      }
+      if (!inQuotes && ch === delim) {
+        out.push(cur)
+        cur = ''
+        continue
+      }
+      cur += ch
+    }
+    out.push(cur)
+    return out.map(x => x.trim())
+  }
+
+  const header = splitRow(rows[0]).map(h => h.toLowerCase())
+  const dataRows = rows.slice(1).map(splitRow)
+
+  const idx = (names) => header.findIndex(h => names.some(n => h.includes(n)))
+  const dateIdx = idx(['buchungstag', 'buchungsdatum', 'date'])
+  const valutaIdx = idx(['valuta'])
+  const amountIdx = idx(['betrag', 'amount'])
+  const purposeIdx = idx(['verwendungszweck', 'zweck', 'purpose'])
+  const nameIdx = idx(['begünstigter', 'beguenstigter', 'zahlungspflichtiger', 'auftraggeber', 'name'])
+  const ibanIdx = idx(['iban'])
+
+  const tx = []
+  for (const r of dataRows) {
+    const date = (r[dateIdx] || r[valutaIdx] || '').trim()
+    const amount = parseGermanNumber(r[amountIdx])
+    const purpose = (r[purposeIdx] || '').trim()
+    const name = (r[nameIdx] || '').trim()
+    const iban = (r[ibanIdx] || '').trim()
+    if (!amount) continue
+    tx.push({ id: `${date}|${amount}|${purpose}`.slice(0, 140), date, amount, purpose, name, iban })
+  }
+  return tx
+}
+
+function isoDateToday() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function normalizeInvoiceNumber(s) {
+  return String(s || '').toUpperCase().replace(/\s+/g, '')
+}
+
 function getCurrentYear() { return new Date().getFullYear() }
 
 // Fetch via Netlify Function (API key stays server-side)
@@ -262,7 +351,16 @@ export default function App() {
   const [configured, setConfigured] = useState(false)
   const [selectedYear, setSelectedYear] = useState(getCurrentYear())
   const [chartType, setChartType] = useState('netto') // netto | bezahlt | offen | ueberfaellig
-  const [view, setView] = useState('chart') // chart | table
+  const [view, setView] = useState('chart') // chart | table | reconcile
+
+  // Reconcile state
+  const [adminToken, setAdminToken] = useState(() => localStorage.getItem('bm_admin_token') || '')
+  const [transactions, setTransactions] = useState([])
+  const [openInvoices, setOpenInvoices] = useState([])
+  const [txQuery, setTxQuery] = useState('')
+  const [matchByInvoiceId, setMatchByInvoiceId] = useState({})
+  const [payDateByInvoiceId, setPayDateByInvoiceId] = useState({})
+  const [bookingBusyId, setBookingBusyId] = useState(null)
 
   const kpis = invoices.length ? buildKPIs(invoices) : null
   const { matrix, years, thisYear, thisMonth } = invoices.length
@@ -271,6 +369,61 @@ export default function App() {
 
   const chartData = years.length ? yearToChartData(matrix, selectedYear, thisYear, thisMonth) : []
   const cumulativeYoYData = years.length ? yearToCumulativeYoYData(matrix, selectedYear, thisYear, thisMonth) : []
+
+  async function fetchOpenInvoices() {
+    const base = new URL('/.netlify/functions/billomat-invoices', window.location.origin)
+
+    const fetchStatus = async (st) => {
+      const url = new URL(base)
+      url.searchParams.set('status', st)
+      const res = await fetch(url)
+      const data = await res.json()
+      if (!res.ok || !data?.ok) throw new Error(data?.error || `HTTP ${res.status}`)
+      return Array.isArray(data.invoices) ? data.invoices : []
+    }
+
+    // OPEN + OVERDUE
+    const [open, overdue] = await Promise.all([
+      fetchStatus('OPEN'),
+      fetchStatus('OVERDUE')
+    ])
+    const merged = [...open, ...overdue]
+
+    // De-duplicate by id
+    const map = new Map()
+    for (const inv of merged) {
+      const id = String(inv.id || '')
+      if (!id) continue
+      map.set(id, inv)
+    }
+    return Array.from(map.values())
+  }
+
+  async function bookPayment({ invoice, tx, payDate }) {
+    const url = new URL('/.netlify/functions/billomat-book-payment', window.location.origin)
+    const amount = Math.abs(Number(tx.amount))
+    const body = {
+      invoiceId: Number(invoice.id),
+      date: payDate,
+      amount,
+      comment: `Sparkasse: ${tx.purpose || ''}`.slice(0, 180),
+      type: 'BANK_TRANSFER',
+      markInvoiceAsPaid: true
+    }
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-admin-token': adminToken
+      },
+      body: JSON.stringify(body)
+    })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok || !data?.ok) {
+      throw new Error(data?.error || `HTTP ${res.status}`)
+    }
+    return data
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -294,6 +447,10 @@ export default function App() {
     // Auto-load once. If the backend isn't configured yet, user sees the error.
     load()
   }, [load])
+
+  useEffect(() => {
+    localStorage.setItem('bm_admin_token', adminToken)
+  }, [adminToken])
 
   // Yearly summary for the table view
   const yearlyTable = years.map(y => {
@@ -481,10 +638,10 @@ export default function App() {
               marginTop: 40, marginBottom: 20
             }}>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16 }}>
-                Monatliche Auswertung
+                {view === 'reconcile' ? 'Zahlungen buchen' : 'Monatliche Auswertung'}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                {['chart', 'table'].map(v => (
+                {['chart', 'table', 'reconcile'].map(v => (
                   <button key={v} onClick={() => setView(v)} style={{
                     padding: '6px 14px', borderRadius: 6,
                     border: view === v ? '1px solid var(--accent2)' : '1px solid var(--border)',
@@ -492,24 +649,25 @@ export default function App() {
                     color: view === v ? 'var(--accent2)' : 'var(--text-muted)',
                     fontSize: 12
                   }}>
-                    {v === 'chart' ? '▦ Chart' : '≡ Tabelle'}
+                    {v === 'chart' ? '▦ Chart' : v === 'table' ? '≡ Tabelle' : '✓ Buchen'}
                   </button>
                 ))}
               </div>
             </div>
 
-            {/* Year Tabs */}
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
-              {years.map(y => (
-                <YearTab
-                  key={y}
-                  year={y}
-                  active={selectedYear === y}
-                  onClick={() => setSelectedYear(y)}
-                  isCurrentYear={y === thisYear}
-                />
-              ))}
-            </div>
+            {view !== 'reconcile' && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+                {years.map(y => (
+                  <YearTab
+                    key={y}
+                    year={y}
+                    active={selectedYear === y}
+                    onClick={() => setSelectedYear(y)}
+                    isCurrentYear={y === thisYear}
+                  />
+                ))}
+              </div>
+            )}
 
             {view === 'chart' && (
               <>
@@ -778,6 +936,236 @@ export default function App() {
                       ))}
                     </tbody>
                   </table>
+                </div>
+              </div>
+            )}
+
+            {view === 'reconcile' && (
+              <div style={{
+                background: 'var(--bg2)', border: '1px solid var(--border)',
+                borderRadius: 16, padding: 20
+              }}>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr',
+                  gap: 16
+                }}>
+                  <div style={{
+                    background: 'var(--bg3)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 12,
+                    padding: 16
+                  }}>
+                    <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, marginBottom: 10 }}>
+                      Sparkasse Datei (CSV)
+                    </div>
+                    <input
+                      type="file"
+                      accept=".csv,text/csv"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0]
+                        if (!f) return
+                        const text = await f.text()
+                        const tx = parseCsv(text)
+                        setTransactions(tx)
+                      }}
+                      style={{ width: '100%' }}
+                    />
+                    <div style={{ marginTop: 10, color: 'var(--text-muted)', fontSize: 12 }}>
+                      {transactions.length ? `${transactions.length} Zahlungseingänge geladen` : 'Noch keine Datei geladen.'}
+                    </div>
+                    <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
+                      <label style={{ flex: 1, minWidth: 220 }}>
+                        <div style={{ fontSize: 11, letterSpacing: 1.5, color: 'var(--text-muted)', marginBottom: 6 }}>
+                          Suche in Sparkasse-Daten
+                        </div>
+                        <input
+                          value={txQuery}
+                          onChange={e => setTxQuery(e.target.value)}
+                          placeholder="z.B. RE-2026-001 oder Name"
+                          style={{
+                            width: '100%', padding: '10px 12px', borderRadius: 8,
+                            border: '1px solid var(--border)', background: 'var(--bg2)',
+                            color: 'var(--text)', fontSize: 13, outline: 'none'
+                          }}
+                        />
+                      </label>
+                      <label style={{ flex: 1, minWidth: 220 }}>
+                        <div style={{ fontSize: 11, letterSpacing: 1.5, color: 'var(--text-muted)', marginBottom: 6 }}>
+                          Admin-Token (zum Buchen)
+                        </div>
+                        <input
+                          type="password"
+                          value={adminToken}
+                          onChange={e => setAdminToken(e.target.value)}
+                          placeholder="(Netlify Env BILLOMAT_ADMIN_TOKEN)"
+                          style={{
+                            width: '100%', padding: '10px 12px', borderRadius: 8,
+                            border: '1px solid var(--border)', background: 'var(--bg2)',
+                            color: 'var(--text)', fontSize: 13, outline: 'none'
+                          }}
+                        />
+                      </label>
+                    </div>
+                    <div style={{ marginTop: 10, color: 'var(--text-muted)', fontSize: 11, lineHeight: 1.6 }}>
+                      Buchung nutzt Billomat API: <span style={{ color: 'var(--accent2)' }}>POST /api/invoice-payments</span> (Zahlart: BANK_TRANSFER).
+                    </div>
+                  </div>
+
+                  <div style={{
+                    background: 'var(--bg3)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 12,
+                    padding: 16
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+                      <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700 }}>
+                        Offene Rechnungen (OPEN/OVERDUE)
+                      </div>
+                      <button
+                        onClick={async () => {
+                          setLoading(true)
+                          setError('')
+                          try {
+                            const list = await fetchOpenInvoices()
+                            setOpenInvoices(list)
+                            setStatus(`${list.length} offene Rechnungen geladen ✓`)
+                          } catch (e) {
+                            setError(e.message)
+                          } finally {
+                            setLoading(false)
+                          }
+                        }}
+                        disabled={loading}
+                        style={{
+                          padding: '8px 14px', borderRadius: 8,
+                          border: '1px solid var(--accent)',
+                          background: 'rgba(110,231,183,0.1)',
+                          color: 'var(--accent)', fontSize: 12,
+                          opacity: loading ? 0.6 : 1
+                        }}
+                      >
+                        ↻ Offene laden
+                      </button>
+                    </div>
+
+                    {openInvoices.length === 0 ? (
+                      <div style={{ marginTop: 12, color: 'var(--text-muted)', fontSize: 12 }}>
+                        Klicke “Offene laden”.
+                      </div>
+                    ) : (
+                      <div style={{ overflowX: 'auto', marginTop: 12 }}>
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                          <thead>
+                            <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                              <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>RE</th>
+                              <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>Kunde</th>
+                              <th style={{ padding: '10px 8px', textAlign: 'right', color: 'var(--text-muted)' }}>Brutto</th>
+                              <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>Status</th>
+                              <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>Match (Sparkasse)</th>
+                              <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>Bezahldatum</th>
+                              <th style={{ padding: '10px 8px', textAlign: 'right', color: 'var(--text-muted)' }}>Aktion</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {openInvoices.map(inv => {
+                              const invId = String(inv.id)
+                              const invNo = normalizeInvoiceNumber(inv.invoice_number || inv.number || '')
+                              const client = String(inv.client_name || inv.client || '')
+                              const gross = parseFloat(inv.total_gross || inv.gross_total || 0)
+                              const st = String(inv.status || '').toUpperCase()
+                              const payDate = payDateByInvoiceId[invId] || isoDateToday()
+                              const selectedTxId = matchByInvoiceId[invId] || ''
+
+                              const q = String(txQuery || '').toLowerCase().trim()
+                              const suggested = transactions
+                                .filter(t => {
+                                  const hay = `${t.purpose} ${t.name} ${t.iban}`.toLowerCase()
+                                  const invMatch = invNo && hay.includes(invNo.toLowerCase())
+                                  const queryMatch = !q || hay.includes(q)
+                                  return invMatch || queryMatch
+                                })
+                                .slice(0, 50)
+
+                              const selectedTx = transactions.find(t => t.id === selectedTxId) || null
+
+                              return (
+                                <tr key={invId} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                                  <td style={{ padding: '10px 8px', color: 'var(--text)' }}>{inv.invoice_number || inv.number || invId}</td>
+                                  <td style={{ padding: '10px 8px', color: 'var(--text-dim)' }}>{client}</td>
+                                  <td style={{ padding: '10px 8px', textAlign: 'right', color: 'var(--text)' }}>{fmt(gross)}</td>
+                                  <td style={{ padding: '10px 8px', color: st === 'OVERDUE' ? 'var(--danger)' : 'var(--accent2)' }}>{st}</td>
+                                  <td style={{ padding: '10px 8px' }}>
+                                    <select
+                                      value={selectedTxId}
+                                      onChange={e => setMatchByInvoiceId(prev => ({ ...prev, [invId]: e.target.value }))}
+                                      style={{
+                                        width: '100%', minWidth: 260,
+                                        padding: '8px 10px', borderRadius: 8,
+                                        border: '1px solid var(--border)', background: 'var(--bg2)',
+                                        color: 'var(--text)', fontSize: 12
+                                      }}
+                                    >
+                                      <option value="">— auswählen —</option>
+                                      {suggested.map(t => (
+                                        <option key={t.id} value={t.id}>
+                                          {t.date} • {fmt(Math.abs(t.amount))} • {(t.purpose || t.name || '').slice(0, 60)}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                  <td style={{ padding: '10px 8px' }}>
+                                    <input
+                                      type="date"
+                                      value={payDate}
+                                      onChange={e => setPayDateByInvoiceId(prev => ({ ...prev, [invId]: e.target.value }))}
+                                      style={{
+                                        padding: '8px 10px', borderRadius: 8,
+                                        border: '1px solid var(--border)', background: 'var(--bg2)',
+                                        color: 'var(--text)', fontSize: 12
+                                      }}
+                                    />
+                                  </td>
+                                  <td style={{ padding: '10px 8px', textAlign: 'right' }}>
+                                    <button
+                                      onClick={async () => {
+                                        if (!adminToken) { setError('Admin-Token fehlt'); return }
+                                        if (!selectedTx) { setError('Kein Sparkasse-Match ausgewählt'); return }
+                                        const ok = window.confirm(`Zahlung buchen?\n${inv.invoice_number || invId} ← ${selectedTx.date} ${fmt(Math.abs(selectedTx.amount))}`)
+                                        if (!ok) return
+                                        setBookingBusyId(invId)
+                                        setError('')
+                                        try {
+                                          await bookPayment({ invoice: inv, tx: selectedTx, payDate })
+                                          setStatus(`Gebucht: ${inv.invoice_number || invId} ✓`)
+                                          // remove from list optimistically
+                                          setOpenInvoices(prev => prev.filter(x => String(x.id) !== invId))
+                                        } catch (e) {
+                                          setError(e.message)
+                                        } finally {
+                                          setBookingBusyId(null)
+                                        }
+                                      }}
+                                      disabled={bookingBusyId === invId}
+                                      style={{
+                                        padding: '8px 12px', borderRadius: 8,
+                                        border: '1px solid var(--accent2)',
+                                        background: 'rgba(129,140,248,0.12)',
+                                        color: 'var(--accent2)', fontSize: 12,
+                                        opacity: bookingBusyId === invId ? 0.6 : 1
+                                      }}
+                                    >
+                                      {bookingBusyId === invId ? '…' : 'Zahlung buchen'}
+                                    </button>
+                                  </td>
+                                </tr>
+                              )
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             )}

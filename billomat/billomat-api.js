@@ -21,6 +21,13 @@ function jsonHeaders(apiKey) {
   };
 }
 
+function jsonWriteHeaders(apiKey) {
+  return {
+    ...jsonHeaders(apiKey),
+    'Content-Type': 'application/json'
+  };
+}
+
 function toUrl(baseUrl, path, query) {
   const url = new URL(path, baseUrl);
   if (query) {
@@ -69,7 +76,46 @@ async function billomatGetJson({ path, query }) {
   return data;
 }
 
+async function billomatPostJson({ path, bodyObj }) {
+  const baseUrl = buildBaseUrl();
+  const apiKey = getEnv('BILLOMAT_API_KEY').trim();
+
+  if (!baseUrl) {
+    throw new Error('Missing BILLOMAT_BASE_URL or BILLOMAT_ID');
+  }
+  if (!apiKey) {
+    throw new Error('Missing BILLOMAT_API_KEY');
+  }
+
+  const url = toUrl(baseUrl, path);
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: jsonWriteHeaders(apiKey),
+    body: JSON.stringify(bodyObj || {})
+  });
+
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = { raw: text };
+  }
+
+  if (!res.ok) {
+    const msg = (data && (data.error || data.message)) ? (data.error || data.message) : `HTTP ${res.status}`;
+    const err = new Error(`Billomat POST failed: ${msg}`);
+    err.status = res.status;
+    err.payload = data;
+    throw err;
+  }
+
+  return data;
+}
+
 module.exports = {
   buildBaseUrl,
-  billomatGetJson
+  billomatGetJson,
+  billomatPostJson
 };
