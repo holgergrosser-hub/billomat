@@ -71,6 +71,15 @@ function detectDelimiter(line) {
   return ','
 }
 
+function normalizeHeaderCell(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
 function parseCsv(text) {
   const rows = String(text || '')
     .replace(/^\uFEFF/, '')
@@ -103,16 +112,28 @@ function parseCsv(text) {
     return out.map(x => x.trim())
   }
 
-  const header = splitRow(rows[0]).map(h => h.toLowerCase())
+  const header = splitRow(rows[0]).map(normalizeHeaderCell)
   const dataRows = rows.slice(1).map(splitRow)
 
-  const idx = (names) => header.findIndex(h => names.some(n => h.includes(n)))
+  const idx = (exactNames, partialNames = exactNames) => {
+    const normalizedExact = exactNames.map(normalizeHeaderCell)
+    const normalizedPartial = partialNames.map(normalizeHeaderCell)
+
+    const exactIdx = header.findIndex(h => normalizedExact.includes(h))
+    if (exactIdx >= 0) return exactIdx
+
+    return header.findIndex(h => normalizedPartial.some(n => h.includes(n)))
+  }
+
   const dateIdx = idx(['buchungstag', 'buchungsdatum', 'date'])
-  const valutaIdx = idx(['valuta'])
+  const valutaIdx = idx(['valutadatum', 'valuta'])
   const amountIdx = idx(['betrag', 'amount'])
   const purposeIdx = idx(['verwendungszweck', 'zweck', 'purpose'])
-  const nameIdx = idx(['begünstigter', 'beguenstigter', 'zahlungspflichtiger', 'auftraggeber', 'name'])
-  const ibanIdx = idx(['iban'])
+  const nameIdx = idx(
+    ['beguenstigter zahlungspflichtiger'],
+    ['begunstigter', 'beguenstigter', 'zahlungspflichtiger', 'auftraggeber', 'name']
+  )
+  const ibanIdx = idx(['kontonummer iban', 'iban'], ['iban', 'kontonummer'])
 
   const tx = []
   for (const r of dataRows) {
