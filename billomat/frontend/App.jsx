@@ -24,6 +24,17 @@ function fmtInt(val) {
   return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 }).format(val || 0)
 }
 
+function fmtDate(value) {
+  const iso = String(value || '').trim()
+  if (!iso) return '—'
+
+  const match = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return iso
+
+  const [, year, month, day] = match
+  return `${day}.${month}.${year}`
+}
+
 function parseGermanNumber(v) {
   if (v == null) return 0
   const s = String(v).trim()
@@ -1353,6 +1364,7 @@ export default function App() {
                           <thead>
                             <tr style={{ borderBottom: '1px solid var(--border)' }}>
                               <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>RE</th>
+                              <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>Rg.-Datum</th>
                               <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>Kd.-Nr.</th>
                               <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>Kunde</th>
                               <th style={{ padding: '10px 8px', textAlign: 'right', color: 'var(--text-muted)' }}>Brutto</th>
@@ -1366,6 +1378,7 @@ export default function App() {
                             {openInvoices.map(inv => {
                               const invId = String(inv.id)
                               const invNo = normalizeInvoiceNumber(inv.invoice_number || inv.number || '')
+                              const invoiceDate = String(inv.invoice_date || inv.date || '')
                               const customerNumber = extractCustomerNumber(inv)
                               const client = String(inv.client_name || inv.client || '')
                               const gross = parseFloat(inv.total_gross || inv.gross_total || 0)
@@ -1379,6 +1392,7 @@ export default function App() {
                               return (
                                 <tr key={invId} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                                   <td style={{ padding: '10px 8px', color: 'var(--text)' }}>{inv.invoice_number || inv.number || invId}</td>
+                                  <td style={{ padding: '10px 8px', color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>{fmtDate(invoiceDate)}</td>
                                   <td style={{ padding: '10px 8px', color: 'var(--text-dim)' }}>{customerNumber || '—'}</td>
                                   <td style={{ padding: '10px 8px', color: 'var(--text-dim)' }}>{client}</td>
                                   <td style={{ padding: '10px 8px', textAlign: 'right', color: 'var(--text)' }}>{fmt(gross)}</td>
