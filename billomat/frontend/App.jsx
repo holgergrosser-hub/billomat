@@ -96,6 +96,44 @@ function extractInvoiceTokens(value) {
   return Array.from(tokens)
 }
 
+function extractCustomerNumber(invoice) {
+  const directCandidates = [
+    invoice?.customer_number,
+    invoice?.customer_no,
+    invoice?.client_number,
+    invoice?.client_no,
+    invoice?.number_customer,
+    invoice?.number_client,
+    invoice?.customerCode,
+    invoice?.clientCode,
+    invoice?.customer_code,
+    invoice?.client_code,
+    invoice?.client?.customer_number,
+    invoice?.client?.client_number,
+    invoice?.client?.number,
+    invoice?.client?.code,
+    invoice?.customer?.number,
+    invoice?.customer?.code
+  ]
+
+  for (const value of directCandidates) {
+    const normalized = String(value || '').trim()
+    if (normalized) return normalized
+  }
+
+  return ''
+}
+
+function extractCustomerTokens(value) {
+  const normalized = normalizeCompactText(value)
+  if (!normalized) return []
+
+  const tokens = new Set([normalized])
+  const kdTokens = normalized.match(/kd\d{1,}/g) || []
+  for (const token of kdTokens) tokens.add(token)
+  return Array.from(tokens)
+}
+
 function txSearchText(tx) {
   return normalizeLooseText(`${tx.purpose || ''} ${tx.name || ''} ${tx.iban || ''}`)
 }
@@ -108,6 +146,8 @@ function buildMatchCandidates(invoice, transactions, query = '') {
   const invoiceId = String(invoice.id || '')
   const invoiceNumber = String(invoice.invoice_number || invoice.number || '')
   const invoiceTokens = extractInvoiceTokens(invoiceNumber)
+  const customerNumber = extractCustomerNumber(invoice)
+  const customerTokens = extractCustomerTokens(customerNumber)
   const clientName = String(invoice.client_name || invoice.client || '')
   const gross = Math.abs(Number(invoice.total_gross || invoice.gross_total || 0))
   const normalizedQuery = normalizeLooseText(query)
@@ -128,6 +168,7 @@ function buildMatchCandidates(invoice, transactions, query = '') {
     let priority = 99
 
     const invoiceNumberMatch = invoiceTokens.some(token => token && compactText.includes(token))
+    const customerNumberMatch = customerTokens.some(token => token && compactText.includes(token))
     const exactAmountMatch = nearlyEqual(amount, gross)
     const customerNameMatch = namesRoughlyMatch(clientName, `${tx.name || ''} ${tx.purpose || ''}`)
 
@@ -135,14 +176,22 @@ function buildMatchCandidates(invoice, transactions, query = '') {
       score = 100
       reason = 'Rechnungsnummer im Verwendungszweck'
       priority = 1
+    } else if (customerNumberMatch && exactAmountMatch) {
+      score = 93
+      reason = 'Kundennummer + exakter Bruttobetrag'
+      priority = 2
+    } else if (customerNumberMatch) {
+      score = 90
+      reason = 'Kundennummer im Verwendungszweck'
+      priority = 3
     } else if (exactAmountMatch && customerNameMatch) {
       score = 86
       reason = 'Exakter Bruttobetrag + Kundenname'
-      priority = 2
+      priority = 4
     } else if (exactAmountMatch) {
       score = 62
       reason = 'Exakter Betrag'
-      priority = 3
+      priority = 5
     } else {
       continue
     }
@@ -155,6 +204,8 @@ function buildMatchCandidates(invoice, transactions, query = '') {
       reason,
       priority,
       amount,
+      customerNumber,
+      customerNumberMatch,
       customerNameMatch,
       invoiceNumberMatch
     })
@@ -1302,6 +1353,7 @@ export default function App() {
                           <thead>
                             <tr style={{ borderBottom: '1px solid var(--border)' }}>
                               <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>RE</th>
+                              <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>Kd.-Nr.</th>
                               <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>Kunde</th>
                               <th style={{ padding: '10px 8px', textAlign: 'right', color: 'var(--text-muted)' }}>Brutto</th>
                               <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>Status</th>
@@ -1314,6 +1366,7 @@ export default function App() {
                             {openInvoices.map(inv => {
                               const invId = String(inv.id)
                               const invNo = normalizeInvoiceNumber(inv.invoice_number || inv.number || '')
+                              const customerNumber = extractCustomerNumber(inv)
                               const client = String(inv.client_name || inv.client || '')
                               const gross = parseFloat(inv.total_gross || inv.gross_total || 0)
                               const st = String(inv.status || '').toUpperCase()
@@ -1326,6 +1379,7 @@ export default function App() {
                               return (
                                 <tr key={invId} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
                                   <td style={{ padding: '10px 8px', color: 'var(--text)' }}>{inv.invoice_number || inv.number || invId}</td>
+                                  <td style={{ padding: '10px 8px', color: 'var(--text-dim)' }}>{customerNumber || '—'}</td>
                                   <td style={{ padding: '10px 8px', color: 'var(--text-dim)' }}>{client}</td>
                                   <td style={{ padding: '10px 8px', textAlign: 'right', color: 'var(--text)' }}>{fmt(gross)}</td>
                                   <td style={{ padding: '10px 8px', color: st === 'OVERDUE' ? 'var(--danger)' : 'var(--accent2)' }}>{st}</td>
@@ -1361,7 +1415,7 @@ export default function App() {
                                         ? `${scoreLabel(selectedCandidate.score)}e Konfidenz (${selectedCandidate.score}%) - ${selectedCandidate.reason}`
                                         : suggested.length
                                           ? `${suggested.length} mögliche Treffer`
-                                          : 'Kein passender Treffer nach Regeln 1-3 gefunden.'}
+                                          : 'Kein passender Treffer nach Regeln 1-5 gefunden.'}
                                     </div>
                                   </td>
                                   <td style={{ padding: '10px 8px' }}>
