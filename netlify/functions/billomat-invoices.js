@@ -99,6 +99,193 @@ function normalizeInvoicesPayload(data) {
   return [];
 }
 
+function normalizeClientsPayload(data) {
+  if (!data) return [];
+  if (Array.isArray(data.clients)) return data.clients;
+  if (data.clients && Array.isArray(data.clients.client)) return data.clients.client;
+  if (Array.isArray(data.client)) return data.client;
+  if (data.client && !Array.isArray(data.client) && typeof data.client === 'object') return [data.client];
+  if (data.clients && typeof data.clients === 'object') {
+    if (data.clients.client && !Array.isArray(data.clients.client)) return [data.clients.client];
+  }
+  return [];
+}
+
+function chunkArray(items, size) {
+  const chunks = [];
+  for (let i = 0; i < items.length; i += size) {
+    chunks.push(items.slice(i, i + size));
+  }
+  return chunks;
+}
+
+async function fetchClientsByInvoiceIds(invoiceIds) {
+  const uniqueIds = Array.from(new Set((invoiceIds || []).map(id => String(id || '').trim()).filter(Boolean)));
+  if (!uniqueIds.length) return [];
+
+  const chunks = chunkArray(uniqueIds, 50);
+  const allClients = [];
+
+  for (const ids of chunks) {
+    const data = await billomatGetJson({
+      path: '/api/clients',
+      query: {
+        invoice_id: ids.join(','),
+        per_page: 100
+      }
+    });
+
+    allClients.push(...normalizeClientsPayload(data));
+  }
+
+  return allClients;
+}
+
+async function fetchClientForInvoiceId(invoiceId) {
+  const id = String(invoiceId || '').trim();
+  if (!id) return null;
+
+  const data = await billomatGetJson({
+    path: '/api/clients',
+    query: {
+      invoice_id: id,
+      per_page: 10
+    }
+  });
+
+  return normalizeClientsPayload(data)[0] || null;
+}
+
+function extractInvoiceClientId(invoice) {
+  const candidates = [
+    invoice?.client_id,
+    invoice?.client?.id,
+    invoice?.client?.client_id,
+    invoice?.customer_id,
+    invoice?.customer?.id
+  ];
+
+  for (const value of candidates) {
+    const normalized = String(value || '').trim();
+    if (normalized) return normalized;
+  }
+
+  return '';
+}
+
+function buildClientIdMap(clients) {
+  const map = new Map();
+  for (const client of clients) {
+    const clientId = String(client?.id || '').trim();
+    if (clientId && !map.has(clientId)) {
+      map.set(clientId, client);
+    }
+  }
+  return map;
+}
+
+function buildClientInvoiceMap(clients) {
+  const map = new Map();
+
+  for (const client of clients) {
+    const invoicesRaw = client?.invoice_id ?? client?.invoice_ids ?? client?.invoices ?? client?.invoice;
+    const invoiceIds = [];
+
+    if (Array.isArray(invoicesRaw)) {
+      for (const item of invoicesRaw) {
+        const id = item?.id ?? item;
+        if (id != null && String(id).trim()) invoiceIds.push(String(id).trim());
+      }
+    } else if (typeof invoicesRaw === 'string') {
+      for (const part of invoicesRaw.split(',')) {
+        const id = String(part || '').trim();
+        if (id) invoiceIds.push(id);
+      }
+    } else if (invoicesRaw && typeof invoicesRaw === 'object') {
+      const nested = invoicesRaw.id ?? invoicesRaw['@id'] ?? invoicesRaw.invoice_id;
+      if (nested != null && String(nested).trim()) invoiceIds.push(String(nested).trim());
+    } else if (invoicesRaw != null && String(invoicesRaw).trim()) {
+      invoiceIds.push(String(invoicesRaw).trim());
+    }
+
+    for (const invoiceId of invoiceIds) {
+      if (!map.has(invoiceId)) {
+        map.set(invoiceId, client);
+      }
+    }
+  }
+
+  return map;
+}
+
+function enrichInvoicesWithClientData(invoices, clients) {
+  const clientByInvoiceId = buildClientInvoiceMap(clients);
+  const clientById = buildClientIdMap(clients);
+
+  return invoices.map((invoice) => {
+    const invoiceId = String(invoice?.id || '').trim();
+    const invoiceClientId = extractInvoiceClientId(invoice);
+    const client = clientById.get(invoiceClientId) || clientByInvoiceId.get(invoiceId);
+    if (!client) return invoice;
+
+    const clientNumber = client.client_number || invoice.client_number || invoice.customer_number || '';
+    const clientCode = client.number_pre && client.number != null
+      ? `${client.number_pre}${client.number}`
+      : (client.number != null ? String(client.number) : '');
+
+    return {
+      ...invoice,
+      client_name: invoice.client_name || client.name || invoice.client || '',
+      client_number: clientNumber || clientCode || invoice.client_number || '',
+      customer_number: clientNumber || clientCode || invoice.customer_number || '',
+      client_id: invoice.client_id || invoiceClientId || client.id || '',
+      client: {
+        ...(invoice.client && typeof invoice.client === 'object' ? invoice.client : {}),
+        id: invoice.client?.id || invoiceClientId || client.id || '',
+        name: invoice.client?.name || client.name || invoice.client_name || '',
+        client_number: invoice.client?.client_number || clientNumber || clientCode || '',
+        number: invoice.client?.number || client.number || '',
+        number_pre: invoice.client?.number_pre || client.number_pre || ''
+      }
+    };
+  });
+}
+
+async function enrichInvoicesWithClientDataViaApi(invoices, { allowPerInvoiceFallback = false } = {}) {
+  const baseClients = await fetchClientsByInvoiceIds(invoices.map(inv => inv?.id));
+  let enriched = enrichInvoicesWithClientData(invoices, baseClients);
+
+  if (!allowPerInvoiceFallback) {
+    return enriched;
+  }
+
+  const unresolved = enriched.filter(inv => {
+    const hasCustomerNumber = String(inv?.client_number || inv?.customer_number || inv?.client?.client_number || '').trim();
+    return !hasCustomerNumber;
+  });
+
+  if (!unresolved.length) {
+    return enriched;
+  }
+
+  const fallbackClients = [];
+  for (const invoice of unresolved) {
+    try {
+      const client = await fetchClientForInvoiceId(invoice?.id);
+      if (client) fallbackClients.push(client);
+    } catch {
+      // Keep invoice response usable even if single-client lookup fails.
+    }
+  }
+
+  if (!fallbackClients.length) {
+    return enriched;
+  }
+
+  enriched = enrichInvoicesWithClientData(enriched, fallbackClients);
+  return enriched;
+}
+
 function readTotalCount(data) {
   const raw = data?.invoices?.['@total'] ?? data?.invoices?.total ?? data?.['@total'] ?? data?.total;
   const n = Number.parseInt(String(raw ?? ''), 10);
@@ -252,6 +439,9 @@ exports.handler = async (event) => {
       invoices = loadMockInvoices();
     } else {
       invoices = await fetchAllInvoicesViaApi({ status, from, to });
+      invoices = await enrichInvoicesWithClientDataViaApi(invoices, {
+        allowPerInvoiceFallback: status === 'OPEN' || status === 'OVERDUE' || status === 'DUE'
+      });
     }
 
     const summary = computeMonthlySummary(invoices, { futureYearsToAdd });
