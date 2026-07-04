@@ -36,6 +36,140 @@ function parseGermanNumber(v) {
   return Number.isFinite(n) ? n : 0
 }
 
+function nearlyEqual(a, b, epsilon = 0.009) {
+  return Math.abs(Number(a || 0) - Number(b || 0)) <= epsilon
+}
+
+function normalizeLooseText(value) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+function normalizeCompactText(value) {
+  return normalizeLooseText(value).replace(/\s+/g, '')
+}
+
+function tokenizeCompanyName(value) {
+  const ignored = new Set([
+    'gmbh', 'ag', 'ug', 'mbh', 'kg', 'ohg', 'ltd', 'limited', 'inc', 'llc', 'corp',
+    'und', 'der', 'die', 'das', 'fuer', 'fur', 'technik', 'service'
+  ])
+
+  return normalizeLooseText(value)
+    .split(/\s+/)
+    .filter(token => token.length >= 4 && !ignored.has(token))
+}
+
+function namesRoughlyMatch(a, b) {
+  const compactA = normalizeCompactText(a)
+  const compactB = normalizeCompactText(b)
+  if (!compactA || !compactB) return false
+  if (compactA.includes(compactB) || compactB.includes(compactA)) return true
+
+  const tokensA = tokenizeCompanyName(a)
+  const tokensB = tokenizeCompanyName(b)
+  if (!tokensA.length || !tokensB.length) return false
+
+  const shared = tokensA.filter(token => tokensB.includes(token))
+  if (shared.length >= 2) return true
+  return shared.some(token => token.length >= 8)
+}
+
+function scoreLabel(score) {
+  if (score >= 95) return 'Sehr hoch'
+  if (score >= 80) return 'Hoch'
+  if (score >= 60) return 'Mittel'
+  return 'Niedrig'
+}
+
+function extractInvoiceTokens(value) {
+  const normalized = normalizeCompactText(value)
+  if (!normalized) return []
+
+  const tokens = new Set([normalized])
+  const reTokens = normalized.match(/re\d{2,}/g) || []
+  for (const token of reTokens) tokens.add(token)
+  return Array.from(tokens)
+}
+
+function txSearchText(tx) {
+  return normalizeLooseText(`${tx.purpose || ''} ${tx.name || ''} ${tx.iban || ''}`)
+}
+
+function txCompactSearchText(tx) {
+  return normalizeCompactText(`${tx.purpose || ''} ${tx.name || ''} ${tx.iban || ''}`)
+}
+
+function buildMatchCandidates(invoice, transactions, query = '') {
+  const invoiceId = String(invoice.id || '')
+  const invoiceNumber = String(invoice.invoice_number || invoice.number || '')
+  const invoiceTokens = extractInvoiceTokens(invoiceNumber)
+  const clientName = String(invoice.client_name || invoice.client || '')
+  const gross = Math.abs(Number(invoice.total_gross || invoice.gross_total || 0))
+  const normalizedQuery = normalizeLooseText(query)
+
+  const candidates = []
+
+  for (const tx of transactions) {
+    const amount = Math.abs(Number(tx.amount || 0))
+    const searchText = txSearchText(tx)
+    const compactText = txCompactSearchText(tx)
+
+    if (normalizedQuery && !searchText.includes(normalizedQuery)) {
+      continue
+    }
+
+    let score = 0
+    let reason = ''
+    let priority = 99
+
+    const invoiceNumberMatch = invoiceTokens.some(token => token && compactText.includes(token))
+    const exactAmountMatch = nearlyEqual(amount, gross)
+    const customerNameMatch = namesRoughlyMatch(clientName, `${tx.name || ''} ${tx.purpose || ''}`)
+
+    if (invoiceNumberMatch) {
+      score = 100
+      reason = 'Rechnungsnummer im Verwendungszweck'
+      priority = 1
+    } else if (exactAmountMatch && customerNameMatch) {
+      score = 86
+      reason = 'Exakter Bruttobetrag + Kundenname'
+      priority = 2
+    } else if (exactAmountMatch) {
+      score = 62
+      reason = 'Exakter Betrag'
+      priority = 3
+    } else {
+      continue
+    }
+
+    candidates.push({
+      invoiceId,
+      tx,
+      txId: tx.id,
+      score,
+      reason,
+      priority,
+      amount,
+      customerNameMatch,
+      invoiceNumberMatch
+    })
+  }
+
+  candidates.sort((a, b) => {
+    if (a.priority !== b.priority) return a.priority - b.priority
+    if (b.score !== a.score) return b.score - a.score
+    if (b.amount !== a.amount) return b.amount - a.amount
+    return (a.tx.dateIso || '').localeCompare(b.tx.dateIso || '')
+  })
+
+  return candidates
+}
+
 function toIsoDateFromSparkasse(value) {
   const s = String(value || '').trim()
   if (!s) return ''
@@ -139,7 +273,9 @@ function parseCsv(text) {
   for (const r of dataRows) {
     const bookingDateRaw = (r[dateIdx] || '').trim()
     const valutaDateRaw = (r[valutaIdx] || '').trim()
-    const dateIso = toIsoDateFromSparkasse(valutaDateRaw) || toIsoDateFromSparkasse(bookingDateRaw)
+    const bookingDateIso = toIsoDateFromSparkasse(bookingDateRaw)
+    const valutaDateIso = toIsoDateFromSparkasse(valutaDateRaw)
+    const dateIso = bookingDateIso || valutaDateIso
     const amount = parseGermanNumber(r[amountIdx])
     const purpose = (r[purposeIdx] || '').trim()
     const name = (r[nameIdx] || '').trim()
@@ -148,6 +284,9 @@ function parseCsv(text) {
     tx.push({
       id: `${dateIso || bookingDateRaw || valutaDateRaw}|${amount}|${purpose}`.slice(0, 140),
       dateIso,
+      bookingDateIso,
+      valutaDateIso,
+      suggestedPayDate: bookingDateIso || valutaDateIso || '',
       bookingDateRaw,
       valutaDateRaw,
       amount,
@@ -514,6 +653,33 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('bm_admin_token', adminToken)
   }, [adminToken])
+
+  useEffect(() => {
+    if (!openInvoices.length || !transactions.length) return
+
+    const nextMatches = {}
+    const nextPayDates = {}
+
+    for (const inv of openInvoices) {
+      const invId = String(inv.id || '')
+      if (!invId || matchByInvoiceId[invId]) continue
+
+      const best = buildMatchCandidates(inv, transactions, txQuery)[0]
+      if (!best) continue
+
+      nextMatches[invId] = best.txId
+      if (!payDateTouchedByInvoiceId[invId] && best.tx.suggestedPayDate) {
+        nextPayDates[invId] = best.tx.suggestedPayDate
+      }
+    }
+
+    if (Object.keys(nextMatches).length) {
+      setMatchByInvoiceId(prev => ({ ...prev, ...nextMatches }))
+    }
+    if (Object.keys(nextPayDates).length) {
+      setPayDateByInvoiceId(prev => ({ ...prev, ...nextPayDates }))
+    }
+  }, [openInvoices, transactions, txQuery, matchByInvoiceId, payDateTouchedByInvoiceId])
 
   // Yearly summary for the table view
   const yearlyTable = years.map(y => {
@@ -1028,14 +1194,28 @@ export default function App() {
                       onChange={async (e) => {
                         const f = e.target.files?.[0]
                         if (!f) return
-                        const text = await f.text()
-                        const tx = parseCsv(text)
-                        setTransactions(tx)
+                        try {
+                          const buf = await f.arrayBuffer()
+                          const text = new TextDecoder('iso-8859-1').decode(buf)
+                          const tx = parseCsv(text)
+                          setTransactions(tx)
+                          setMatchByInvoiceId({})
+                          setPayDateByInvoiceId({})
+                          setPayDateTouchedByInvoiceId({})
+                          setStatus(`${tx.length} Sparkasse-Buchungen geladen ✓`)
+                          setError('')
+                        } catch (err) {
+                          setError(err.message || 'CSV konnte nicht gelesen werden')
+                        }
                       }}
                       style={{ width: '100%' }}
                     />
                     <div style={{ marginTop: 10, color: 'var(--text-muted)', fontSize: 12 }}>
                       {transactions.length ? `${transactions.length} Zahlungseingänge geladen` : 'Noch keine Datei geladen.'}
+                    </div>
+                    <div style={{ marginTop: 8, color: 'var(--text-muted)', fontSize: 11, lineHeight: 1.6 }}>
+                      Erwartet Sparkasse CSV-CAMT mit Semikolon, ISO-8859-1 und Komma als Dezimaltrennzeichen.
+                      Vorgeschlagenes Zahlungsdatum kommt aus dem Buchungstag.
                     </div>
                     <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
                       <label style={{ flex: 1, minWidth: 220 }}>
@@ -1138,20 +1318,10 @@ export default function App() {
                               const gross = parseFloat(inv.total_gross || inv.gross_total || 0)
                               const st = String(inv.status || '').toUpperCase()
                               const selectedTxId = matchByInvoiceId[invId] || ''
-
-                              const q = String(txQuery || '').toLowerCase().trim()
-                              const suggested = transactions
-                                .filter(t => {
-                                  const hay = `${t.purpose} ${t.name} ${t.iban}`.toLowerCase()
-                                  const invMatch = invNo && hay.includes(invNo.toLowerCase())
-                                  const queryMatch = !q || hay.includes(q)
-                                  return invMatch || queryMatch
-                                })
-                                .sort((a, b) => Math.abs(a.amount) - Math.abs(b.amount))
-                                .slice(0, 50)
-
-                              const selectedTx = transactions.find(t => t.id === selectedTxId) || null
-                              const payDate = payDateByInvoiceId[invId] || selectedTx?.dateIso || isoDateToday()
+                              const suggested = buildMatchCandidates(inv, transactions, txQuery)
+                              const selectedCandidate = suggested.find(item => item.txId === selectedTxId) || suggested[0] || null
+                              const selectedTx = selectedCandidate?.tx || transactions.find(t => t.id === selectedTxId) || null
+                              const payDate = payDateByInvoiceId[invId] || selectedTx?.suggestedPayDate || isoDateToday()
 
                               return (
                                 <tr key={invId} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
@@ -1166,10 +1336,10 @@ export default function App() {
                                         const newTxId = e.target.value
                                         setMatchByInvoiceId(prev => ({ ...prev, [invId]: newTxId }))
 
-                                        const txSel = transactions.find(t => t.id === newTxId) || null
+                                        const txSel = suggested.find(item => item.txId === newTxId)?.tx || transactions.find(t => t.id === newTxId) || null
                                         const touched = Boolean(payDateTouchedByInvoiceId[invId])
-                                        if (txSel?.dateIso && !touched) {
-                                          setPayDateByInvoiceId(prev => ({ ...prev, [invId]: txSel.dateIso }))
+                                        if (txSel?.suggestedPayDate && !touched) {
+                                          setPayDateByInvoiceId(prev => ({ ...prev, [invId]: txSel.suggestedPayDate }))
                                         }
                                       }}
                                       style={{
@@ -1180,12 +1350,19 @@ export default function App() {
                                       }}
                                     >
                                       <option value="">— auswählen —</option>
-                                      {suggested.map(t => (
-                                        <option key={t.id} value={t.id}>
-                                          {(t.dateIso || t.valutaDateRaw || t.bookingDateRaw || '—')} • {fmt(Math.abs(t.amount))} • {(t.purpose || t.name || '').slice(0, 60)}
+                                      {suggested.slice(0, 50).map(match => (
+                                        <option key={match.txId} value={match.txId}>
+                                          {`${match.score}% ${match.reason} • ${match.tx.bookingDateIso || match.tx.bookingDateRaw || '—'} • ${fmt(Math.abs(match.tx.amount))} • ${(match.tx.purpose || match.tx.name || '').slice(0, 50)}`}
                                         </option>
                                       ))}
                                     </select>
+                                    <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                                      {selectedCandidate
+                                        ? `${scoreLabel(selectedCandidate.score)}e Konfidenz (${selectedCandidate.score}%) - ${selectedCandidate.reason}`
+                                        : suggested.length
+                                          ? `${suggested.length} mögliche Treffer`
+                                          : 'Kein passender Treffer nach Regeln 1-3 gefunden.'}
+                                    </div>
                                   </td>
                                   <td style={{ padding: '10px 8px' }}>
                                     <input
@@ -1207,7 +1384,7 @@ export default function App() {
                                       onClick={async () => {
                                         if (!adminToken) { setError('Admin-Token fehlt'); return }
                                         if (!selectedTx) { setError('Kein Sparkasse-Match ausgewählt'); return }
-                                        const ok = window.confirm(`Zahlung buchen?\n${inv.invoice_number || invId} ← ${selectedTx.date} ${fmt(Math.abs(selectedTx.amount))}`)
+                                        const ok = window.confirm(`Zahlung buchen?\n${inv.invoice_number || invId} ← ${selectedTx.bookingDateIso || selectedTx.bookingDateRaw || selectedTx.dateIso || '—'} ${fmt(Math.abs(selectedTx.amount))}`)
                                         if (!ok) return
                                         setBookingBusyId(invId)
                                         setError('')
