@@ -407,11 +407,14 @@ function getCurrentYear() { return new Date().getFullYear() }
 
 // Fetch via Netlify Function (API key stays server-side)
 async function fetchInvoices(setStatus, options = {}) {
-  const { from = '', label = 'Lade Rechnungen…' } = options
+  const { from = '', label = 'Lade Rechnungen…', includeClients = false } = options
   setStatus(label)
   const url = new URL('/.netlify/functions/billomat-invoices', window.location.origin)
   if (from) {
     url.searchParams.set('from', from)
+  }
+  if (includeClients) {
+    url.searchParams.set('includeClients', '1')
   }
   const res = await fetch(url)
   const text = await res.text()
@@ -734,7 +737,8 @@ export default function App() {
     try {
       const data = await fetchInvoices(setStatus, {
         from: `${getCurrentYear()}-01-01`,
-        label: `Lade Rechnungen ab 01.01.${getCurrentYear()}…`
+        label: `Lade Rechnungen ab 01.01.${getCurrentYear()}…`,
+        includeClients: true
       })
       setInvoices(data)
       setStatus(`${data.length} Rechnungen geladen ✓`)
@@ -754,7 +758,8 @@ export default function App() {
     setStatus('Verbinde…')
     try {
       const data = await fetchInvoices(setStatus, {
-        label: 'Lade alle Rechnungsdaten…'
+        label: 'Lade alle Rechnungsdaten…',
+        includeClients: true
       })
       setInvoices(data)
       setStatus(`${data.length} Rechnungen vollständig geladen ✓`)
@@ -1714,3 +1719,4 @@ export default function App() {
     </div>
   )
 }
+
