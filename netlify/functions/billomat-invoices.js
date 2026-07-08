@@ -421,6 +421,7 @@ exports.handler = async (event) => {
   const status = qs.status ? String(qs.status).trim() : '';
   const from = qs.from ? String(qs.from).trim() : '';
   const to = qs.to ? String(qs.to).trim() : '';
+  const includeClients = String(qs.includeClients || qs.include_clients || '').trim() === '1';
 
   if (from && !isIsoDate(from)) {
     return jsonResponse(400, { ok: false, error: 'Invalid from date (YYYY-MM-DD)' });
@@ -439,9 +440,11 @@ exports.handler = async (event) => {
       invoices = loadMockInvoices();
     } else {
       invoices = await fetchAllInvoicesViaApi({ status, from, to });
-      invoices = await enrichInvoicesWithClientDataViaApi(invoices, {
-        allowPerInvoiceFallback: status === 'OPEN' || status === 'OVERDUE' || status === 'DUE'
-      });
+      if (includeClients) {
+        invoices = await enrichInvoicesWithClientDataViaApi(invoices, {
+          allowPerInvoiceFallback: status === 'OPEN' || status === 'OVERDUE' || status === 'DUE'
+        });
+      }
     }
 
     const summary = computeMonthlySummary(invoices, { futureYearsToAdd });
@@ -452,7 +455,8 @@ exports.handler = async (event) => {
         count: invoices.length,
         mock: useMock,
         filters: { status: status || null, from: from || null, to: to || null },
-        futureYearsToAdd
+        futureYearsToAdd,
+        includeClients
       },
       invoices,
       summary
