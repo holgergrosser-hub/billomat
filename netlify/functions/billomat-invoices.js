@@ -292,9 +292,8 @@ function readTotalCount(data) {
   return Number.isFinite(n) ? n : 0;
 }
 
-async function fetchAllInvoicesViaApi({ status, from, to }) {
+async function fetchAllInvoicesViaApi({ status, from, to, maxPages = 1 }) {
   const perPage = 100;
-  const maxPages = 200; // safety cap
   let page = 1;
   let all = [];
   let total = 0;
@@ -422,6 +421,7 @@ exports.handler = async (event) => {
   const from = qs.from ? String(qs.from).trim() : '';
   const to = qs.to ? String(qs.to).trim() : '';
   const includeClients = String(qs.includeClients || qs.include_clients || '').trim() === '1';
+  const loadAllPages = String(qs.loadAllPages || qs.load_all_pages || '').trim() === '1';
 
   if (from && !isIsoDate(from)) {
     return jsonResponse(400, { ok: false, error: 'Invalid from date (YYYY-MM-DD)' });
@@ -439,7 +439,12 @@ exports.handler = async (event) => {
     if (useMock) {
       invoices = loadMockInvoices();
     } else {
-      invoices = await fetchAllInvoicesViaApi({ status, from, to });
+      invoices = await fetchAllInvoicesViaApi({
+        status,
+        from,
+        to,
+        maxPages: loadAllPages ? 200 : 1
+      });
       if (includeClients) {
         invoices = await enrichInvoicesWithClientDataViaApi(invoices, {
           allowPerInvoiceFallback: status === 'OPEN' || status === 'OVERDUE' || status === 'DUE'
@@ -456,7 +461,8 @@ exports.handler = async (event) => {
         mock: useMock,
         filters: { status: status || null, from: from || null, to: to || null },
         futureYearsToAdd,
-        includeClients
+        includeClients,
+        loadAllPages
       },
       invoices,
       summary
