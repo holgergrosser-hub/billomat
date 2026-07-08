@@ -24,6 +24,12 @@ function fmtInt(val) {
   return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 0 }).format(val || 0)
 }
 
+function fmtHours(value) {
+  const num = Number(value || 0)
+  if (!Number.isFinite(num) || num <= 0) return '—'
+  return new Intl.NumberFormat('de-DE', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(num)
+}
+
 function fmtDate(value) {
   const iso = String(value || '').trim()
   if (!iso) return '—'
@@ -143,6 +149,31 @@ function extractCustomerTokens(value) {
   const kdTokens = normalized.match(/kd\d{1,}/g) || []
   for (const token of kdTokens) tokens.add(token)
   return Array.from(tokens)
+}
+function extractOverviewInfo(invoice) {
+  const parts = []
+  const customerNumber = extractCustomerNumber(invoice)
+  const note = String(invoice.note || invoice.comment || invoice.description || '').trim()
+  const dueDate = String(invoice.due_date || '').trim()
+  const paidDate = String(invoice.paid_date || '').trim()
+
+  if (customerNumber) parts.push(`Kd.-Nr. ${customerNumber}`)
+  if (dueDate) parts.push(`Fällig ${fmtDate(dueDate)}`)
+  if (paidDate) parts.push(`Bezahlt ${fmtDate(paidDate)}`)
+  if (note) parts.push(note)
+
+  return parts.length ? parts.join(' • ') : '—'
+}
+
+function extractWorkedHours(invoice) {
+  const candidates = [invoice?.worked_hours, invoice?.hours, invoice?.service_hours, invoice?.duration_hours]
+
+  for (const value of candidates) {
+    const num = Number(value)
+    if (Number.isFinite(num) && num > 0) return num
+  }
+
+  return 0
 }
 
 function txSearchText(tx) {
@@ -375,9 +406,13 @@ function normalizeInvoiceNumber(s) {
 function getCurrentYear() { return new Date().getFullYear() }
 
 // Fetch via Netlify Function (API key stays server-side)
-async function fetchAllInvoices(setStatus) {
-  setStatus('Lade Rechnungen…')
+async function fetchInvoices(setStatus, options = {}) {
+  const { from = '', label = 'Lade Rechnungen…' } = options
+  setStatus(label)
   const url = new URL('/.netlify/functions/billomat-invoices', window.location.origin)
+  if (from) {
+    url.searchParams.set('from', from)
+  }
   const res = await fetch(url)
   const text = await res.text()
   let data
@@ -610,7 +645,7 @@ export default function App() {
   const [configured, setConfigured] = useState(false)
   const [selectedYear, setSelectedYear] = useState(getCurrentYear())
   const [chartType, setChartType] = useState('netto') // netto | bezahlt | offen | ueberfaellig
-  const [view, setView] = useState('chart') // chart | table | reconcile
+  const [view, setView] = useState('chart') // chart | table | overview | reconcile
 
   // Reconcile state
   const [adminToken, setAdminToken] = useState(() => localStorage.getItem('bm_admin_token') || '')
@@ -621,6 +656,8 @@ export default function App() {
   const [payDateByInvoiceId, setPayDateByInvoiceId] = useState({})
   const [payDateTouchedByInvoiceId, setPayDateTouchedByInvoiceId] = useState({})
   const [bookingBusyId, setBookingBusyId] = useState(null)
+  const [overviewQuery, setOverviewQuery] = useState('')
+  const [overviewStatusFilter, setOverviewStatusFilter] = useState('ALL')
 
   const kpis = invoices.length ? buildKPIs(invoices) : null
   const { matrix, years, thisYear, thisMonth } = invoices.length
@@ -636,9 +673,10 @@ export default function App() {
     const fetchStatus = async (st) => {
       const url = new URL(base)
       url.searchParams.set('status', st)
+      url.searchParams.set('includeClients', '1')
       const res = await fetch(url)
       const data = await res.json()
-      if (!res.ok || !data?.ok) throw new Error(data?.error || `HTTP ${res.status}`)
+        if (!res.ok || !data?.ok) throw new Error(data?.error || `HTTP ${res.status}`)
       return Array.isArray(data.invoices) ? data.invoices : []
     }
 
@@ -694,7 +732,10 @@ export default function App() {
     setError('')
     setStatus('Verbinde…')
     try {
-      const data = await fetchAllInvoices(setStatus)
+      const data = await fetchInvoices(setStatus, {
+        from: `${getCurrentYear()}-01-01`,
+        label: `Lade Rechnungen ab 01.01.${getCurrentYear()}…`
+      })
       setInvoices(data)
       setStatus(`${data.length} Rechnungen geladen ✓`)
       setConfigured(true)
@@ -707,10 +748,25 @@ export default function App() {
     }
   }, [])
 
-  useEffect(() => {
-    // Auto-load once. If the backend isn't configured yet, user sees the error.
-    load()
-  }, [load])
+  const loadAllInvoices = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    setStatus('Verbinde…')
+    try {
+      const data = await fetchInvoices(setStatus, {
+        label: 'Lade alle Rechnungsdaten…'
+      })
+      setInvoices(data)
+      setStatus(`${data.length} Rechnungen vollständig geladen ✓`)
+      setConfigured(true)
+      setSelectedYear(getCurrentYear())
+    } catch (e) {
+      setError(e.message)
+      setStatus('')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
     localStorage.setItem('bm_admin_token', adminToken)
@@ -769,6 +825,37 @@ export default function App() {
   ]
 
   const activeChartOpt = CHART_OPTIONS.find(o => o.key === chartType)
+  const normalizedOverviewQuery = normalizeLooseText(overviewQuery)
+  const overviewInvoices = invoices.filter(inv => {
+    const statusKey = String(inv.status || '').toUpperCase()
+    if (overviewStatusFilter !== 'ALL' && statusKey !== overviewStatusFilter) return false
+    if (!normalizedOverviewQuery) return true
+    const hay = normalizeLooseText([
+      inv.client_name,
+      inv.client?.name,
+      extractCustomerNumber(inv),
+      inv.invoice_number,
+      inv.number,
+      inv.invoice_date,
+      inv.note,
+      inv.comment,
+      inv.status
+    ].filter(Boolean).join(' '))
+    return hay.includes(normalizedOverviewQuery)
+  })
+    .sort((a, b) => {
+      const byClient = String(a.client_name || a.client?.name || '').localeCompare(String(b.client_name || b.client?.name || ''), 'de')
+      if (byClient !== 0) return byClient
+      return String(b.invoice_date || b.date || '').localeCompare(String(a.invoice_date || a.date || ''))
+    })
+  const overviewSummary = overviewInvoices.reduce((acc, invoice) => {
+    const statusKey = String(invoice.status || '').toUpperCase()
+    acc.total += 1
+    if (statusKey === 'PAID') acc.paid += 1
+    if (statusKey === 'OPEN') acc.open += 1
+    if (statusKey === 'OVERDUE') acc.overdue += 1
+    return acc
+  }, { total: 0, paid: 0, open: 0, overdue: 0 })
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg)', padding: '0 0 60px' }}>
@@ -788,7 +875,10 @@ export default function App() {
             ◈ BILLOMAT DASHBOARD
           </div>
           <div style={{ color: 'var(--text-muted)', fontSize: 11, letterSpacing: 2, marginTop: 2 }}>
-            RECHNUNGSAUSWERTUNG / NETTO
+            RECHNUNGSAUSWERTUNG / NETTO / UEBERSICHT
+          </div>
+          <div style={{ color: 'var(--accent2)', fontSize: 11, marginTop: 6 }}>
+            Build 2026-07-08 B
           </div>
         </div>
         {configured && (
@@ -852,6 +942,23 @@ export default function App() {
             >
               {loading ? status : '→ Rechnungen Laden'}
             </button>
+
+            <button
+              onClick={loadAllInvoices}
+              disabled={loading}
+              style={{
+                width: '100%', padding: '12px', borderRadius: 10,
+                border: '1px solid var(--accent2)', background: 'transparent',
+                color: 'var(--accent2)', fontFamily: 'var(--font-display)',
+                fontWeight: 700, fontSize: 14, opacity: loading ? 0.5 : 1,
+                transition: 'opacity .2s', marginTop: 10
+              }}
+            >
+              {loading ? status : '→ Alle Rechnungsdaten laden'}
+            </button>
+            <div style={{ marginTop: 8, color: 'var(--text-dim)', fontSize: 11 }}>
+              Lädt alle Rechnungen ohne Jahresfilter.
+            </div>
 
             <div style={{
               marginTop: 20, padding: '12px 16px',
@@ -929,10 +1036,10 @@ export default function App() {
               marginTop: 40, marginBottom: 20
             }}>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16 }}>
-                {view === 'reconcile' ? 'Zahlungen buchen' : 'Monatliche Auswertung'}
+                {view === 'reconcile' ? 'Zahlungen buchen' : view === 'overview' ? 'Kundenübersicht' : 'Monatliche Auswertung'}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                {['chart', 'table', 'reconcile'].map(v => (
+                {['chart', 'table', 'overview', 'reconcile'].map(v => (
                   <button key={v} onClick={() => setView(v)} style={{
                     padding: '6px 14px', borderRadius: 6,
                     border: view === v ? '1px solid var(--accent2)' : '1px solid var(--border)',
@@ -940,13 +1047,13 @@ export default function App() {
                     color: view === v ? 'var(--accent2)' : 'var(--text-muted)',
                     fontSize: 12
                   }}>
-                    {v === 'chart' ? '▦ Chart' : v === 'table' ? '≡ Tabelle' : '✓ Buchen'}
+                    {v === 'chart' ? '▦ Chart' : v === 'table' ? '≡ Tabelle' : v === 'overview' ? '⌕ Übersicht' : '✓ Buchen'}
                   </button>
                 ))}
               </div>
             </div>
 
-            {view !== 'reconcile' && (
+            {view !== 'reconcile' && view !== 'overview' && (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
                 {years.map(y => (
                   <YearTab
@@ -957,6 +1064,117 @@ export default function App() {
                     isCurrentYear={y === thisYear}
                   />
                 ))}
+              </div>
+            )}
+
+            {view === 'overview' && (
+              <div style={{
+                background: 'var(--bg2)', border: '1px solid var(--border)',
+                borderRadius: 16, padding: 20
+              }}>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ flex: 1, minWidth: 260 }}>
+                    <div style={{ fontSize: 11, letterSpacing: 1.5, color: 'var(--text-muted)', marginBottom: 6 }}>
+                      Suche nach Kunde, Kundennummer oder Rechnung
+                    </div>
+                    <input
+                      value={overviewQuery}
+                      onChange={e => setOverviewQuery(e.target.value)}
+                      placeholder="z.B. KD308, MECO oder Schulz"
+                      style={{
+                        width: '100%', padding: '10px 12px', borderRadius: 8,
+                        border: '1px solid var(--border)', background: 'var(--bg3)',
+                        color: 'var(--text)', fontSize: 13, outline: 'none'
+                      }}
+                    />
+                  </label>
+                  <div style={{ marginTop: 8, color: 'var(--text-muted)', fontSize: 11, lineHeight: 1.5 }}>
+                    Nutzt nur bereits geladene Rechnungsdaten. Suche nach Kunde, Kundennummer, Rechnungsnummer oder Rechnungsdatum.
+                  </div>
+                  <div style={{ marginTop: 6, color: 'var(--text-dim)', fontSize: 11 }}>
+                    Übersicht ohne zusätzliche Billomat-Abfragen.
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+                    {[
+                      { key: 'ALL', label: 'Alle' },
+                      { key: 'PAID', label: 'Bezahlt' },
+                      { key: 'OPEN', label: 'Offen' },
+                      { key: 'OVERDUE', label: 'Überfällig' }
+                    ].map(opt => (
+                      <button
+                        key={opt.key}
+                        onClick={() => setOverviewStatusFilter(opt.key)}
+                        style={{
+                          padding: '6px 12px', borderRadius: 999,
+                          border: overviewStatusFilter === opt.key ? '1px solid var(--accent2)' : '1px solid var(--border)',
+                          background: overviewStatusFilter === opt.key ? 'rgba(129,140,248,0.12)' : 'transparent',
+                          color: overviewStatusFilter === opt.key ? 'var(--accent2)' : 'var(--text-muted)',
+                          fontSize: 12
+                        }}
+                      >
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 14 }}>
+                  {overviewInvoices.length
+                    ? `${overviewInvoices.length} Rechnungen in der Übersicht`
+                    : 'Keine passenden Rechnungen gefunden.'}
+                </div>
+
+                <div style={{ color: 'var(--accent2)', fontSize: 11, marginBottom: 14 }}>
+                  Übersicht Build Live 2026-07-08
+                </div>
+
+                {overviewInvoices.length > 0 && (
+                  <div style={{
+                    display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 14,
+                    color: 'var(--text-muted)', fontSize: 12
+                  }}>
+                    <div>Gesamt: <span style={{ color: 'var(--text)' }}>{overviewSummary.total}</span></div>
+                    <div>Bezahlt: <span style={{ color: '#6ee7b7' }}>{overviewSummary.paid}</span></div>
+                    <div>Offen: <span style={{ color: 'var(--accent2)' }}>{overviewSummary.open}</span></div>
+                    <div>Überfällig: <span style={{ color: 'var(--danger)' }}>{overviewSummary.overdue}</span></div>
+                  </div>
+                )}
+
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>Kunde</th>
+                        <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>Kd.-Nr.</th>
+                        <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>Rechnung</th>
+                        <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>Datum</th>
+                        <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>Status</th>
+                        <th style={{ padding: '10px 8px', textAlign: 'right', color: 'var(--text-muted)' }}>Betrag</th>
+                        <th style={{ padding: '10px 8px', textAlign: 'right', color: 'var(--text-muted)' }}>Stunden</th>
+                        <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>Weitere Informationen</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {overviewInvoices.map(inv => {
+                        const statusKey = String(inv.status || '').toUpperCase()
+                        const statusLabel = STATUS_LABELS[statusKey] || statusKey || '—'
+                        const statusColor = STATUS_COLORS[statusKey] || 'var(--text-dim)'
+                        return (
+                          <tr key={String(inv.id)} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                            <td style={{ padding: '10px 8px', color: 'var(--text)' }}>{inv.client_name || inv.client?.name || '—'}</td>
+                            <td style={{ padding: '10px 8px', color: 'var(--text-dim)' }}>{extractCustomerNumber(inv) || '—'}</td>
+                            <td style={{ padding: '10px 8px', color: 'var(--text)' }}>{inv.invoice_number || inv.number || inv.id}</td>
+                            <td style={{ padding: '10px 8px', color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>{fmtDate(inv.invoice_date || inv.date || '')}</td>
+                            <td style={{ padding: '10px 8px', color: statusColor }}>{statusLabel}</td>
+                            <td style={{ padding: '10px 8px', textAlign: 'right', color: 'var(--text)' }}>{fmt(inv.total_gross || inv.gross_total || 0)}</td>
+                            <td style={{ padding: '10px 8px', textAlign: 'right', color: 'var(--text)' }}>{fmtHours(extractWorkedHours(inv))}</td>
+                            <td style={{ padding: '10px 8px', color: 'var(--text-dim)', minWidth: 280 }}>{extractOverviewInfo(inv)}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
