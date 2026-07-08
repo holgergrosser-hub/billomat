@@ -39,6 +39,21 @@ function toUrl(baseUrl, path, query) {
   return url;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function retryDelayMs(res, attempt) {
+  const retryAfterHeader = res.headers.get('retry-after');
+  const retryAfterSeconds = Number.parseInt(String(retryAfterHeader || ''), 10);
+  if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) {
+    return retryAfterSeconds * 1000;
+  }
+
+  const delays = [800, 1600, 3200];
+  return delays[Math.min(attempt, delays.length - 1)];
+}
+
 async function billomatGetJson({ path, query }) {
   const baseUrl = buildBaseUrl();
   const apiKey = getEnv('BILLOMAT_API_KEY').trim();
@@ -52,20 +67,29 @@ async function billomatGetJson({ path, query }) {
 
   const url = toUrl(baseUrl, path, query);
 
-  const res = await fetch(url, {
-    method: 'GET',
-    headers: jsonHeaders(apiKey)
-  });
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: jsonHeaders(apiKey)
+    });
 
-  const text = await res.text();
-  let data;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    data = { raw: text };
-  }
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { raw: text };
+    }
 
-  if (!res.ok) {
+    if (res.ok) {
+      return data;
+    }
+
+    if (res.status === 429 && attempt < 3) {
+      await sleep(retryDelayMs(res, attempt));
+      continue;
+    }
+
     const msg = (data && (data.error || data.message)) ? (data.error || data.message) : `HTTP ${res.status}`;
     const err = new Error(`Billomat GET failed: ${msg}`);
     err.status = res.status;
@@ -73,7 +97,7 @@ async function billomatGetJson({ path, query }) {
     throw err;
   }
 
-  return data;
+  throw new Error('Billomat GET failed: retries exhausted');
 }
 
 async function billomatPostJson({ path, bodyObj }) {
