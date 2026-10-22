@@ -3,6 +3,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, LineChart, Line, ReferenceLine, LabelList
 } from 'recharts'
+import ForderungenView from './ForderungenView'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const MONTHS_DE = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
@@ -53,10 +54,6 @@ function parseGermanNumber(v) {
   return Number.isFinite(n) ? n : 0
 }
 
-function nearlyEqual(a, b, epsilon = 0.009) {
-  return Math.abs(Number(a || 0) - Number(b || 0)) <= epsilon
-}
-
 function normalizeLooseText(value) {
   return String(value || '')
     .toLowerCase()
@@ -68,49 +65,6 @@ function normalizeLooseText(value) {
 
 function normalizeCompactText(value) {
   return normalizeLooseText(value).replace(/\s+/g, '')
-}
-
-function tokenizeCompanyName(value) {
-  const ignored = new Set([
-    'gmbh', 'ag', 'ug', 'mbh', 'kg', 'ohg', 'ltd', 'limited', 'inc', 'llc', 'corp',
-    'und', 'der', 'die', 'das', 'fuer', 'fur', 'technik', 'service'
-  ])
-
-  return normalizeLooseText(value)
-    .split(/\s+/)
-    .filter(token => token.length >= 4 && !ignored.has(token))
-}
-
-function namesRoughlyMatch(a, b) {
-  const compactA = normalizeCompactText(a)
-  const compactB = normalizeCompactText(b)
-  if (!compactA || !compactB) return false
-  if (compactA.includes(compactB) || compactB.includes(compactA)) return true
-
-  const tokensA = tokenizeCompanyName(a)
-  const tokensB = tokenizeCompanyName(b)
-  if (!tokensA.length || !tokensB.length) return false
-
-  const shared = tokensA.filter(token => tokensB.includes(token))
-  if (shared.length >= 2) return true
-  return shared.some(token => token.length >= 8)
-}
-
-function scoreLabel(score) {
-  if (score >= 95) return 'Sehr hoch'
-  if (score >= 80) return 'Hoch'
-  if (score >= 60) return 'Mittel'
-  return 'Niedrig'
-}
-
-function extractInvoiceTokens(value) {
-  const normalized = normalizeCompactText(value)
-  if (!normalized) return []
-
-  const tokens = new Set([normalized])
-  const reTokens = normalized.match(/re\d{2,}/g) || []
-  for (const token of reTokens) tokens.add(token)
-  return Array.from(tokens)
 }
 
 function extractCustomerNumber(invoice) {
@@ -174,233 +128,6 @@ function extractWorkedHours(invoice) {
   }
 
   return 0
-}
-
-function txSearchText(tx) {
-  return normalizeLooseText(`${tx.purpose || ''} ${tx.name || ''} ${tx.iban || ''}`)
-}
-
-function txCompactSearchText(tx) {
-  return normalizeCompactText(`${tx.purpose || ''} ${tx.name || ''} ${tx.iban || ''}`)
-}
-
-function buildMatchCandidates(invoice, transactions, query = '') {
-  const invoiceId = String(invoice.id || '')
-  const invoiceNumber = String(invoice.invoice_number || invoice.number || '')
-  const invoiceTokens = extractInvoiceTokens(invoiceNumber)
-  const customerNumber = extractCustomerNumber(invoice)
-  const customerTokens = extractCustomerTokens(customerNumber)
-  const clientName = String(invoice.client_name || invoice.client || '')
-  const gross = Math.abs(Number(invoice.total_gross || invoice.gross_total || 0))
-  const normalizedQuery = normalizeLooseText(query)
-
-  const candidates = []
-
-  for (const tx of transactions) {
-    const amount = Math.abs(Number(tx.amount || 0))
-    const searchText = txSearchText(tx)
-    const compactText = txCompactSearchText(tx)
-
-    if (normalizedQuery && !searchText.includes(normalizedQuery)) {
-      continue
-    }
-
-    let score = 0
-    let reason = ''
-    let priority = 99
-
-    const invoiceNumberMatch = invoiceTokens.some(token => token && compactText.includes(token))
-    const customerNumberMatch = customerTokens.some(token => token && compactText.includes(token))
-    const exactAmountMatch = nearlyEqual(amount, gross)
-    const customerNameMatch = namesRoughlyMatch(clientName, `${tx.name || ''} ${tx.purpose || ''}`)
-
-    if (invoiceNumberMatch) {
-      score = 100
-      reason = 'Rechnungsnummer im Verwendungszweck'
-      priority = 1
-    } else if (customerNumberMatch && exactAmountMatch) {
-      score = 93
-      reason = 'Kundennummer + exakter Bruttobetrag'
-      priority = 2
-    } else if (customerNumberMatch) {
-      score = 90
-      reason = 'Kundennummer im Verwendungszweck'
-      priority = 3
-    } else if (exactAmountMatch && customerNameMatch) {
-      score = 86
-      reason = 'Exakter Bruttobetrag + Kundenname'
-      priority = 4
-    } else if (exactAmountMatch) {
-      score = 62
-      reason = 'Exakter Betrag'
-      priority = 5
-    } else {
-      continue
-    }
-
-    candidates.push({
-      invoiceId,
-      tx,
-      txId: tx.id,
-      score,
-      reason,
-      priority,
-      amount,
-      customerNumber,
-      customerNumberMatch,
-      customerNameMatch,
-      invoiceNumberMatch
-    })
-  }
-
-  candidates.sort((a, b) => {
-    if (a.priority !== b.priority) return a.priority - b.priority
-    if (b.score !== a.score) return b.score - a.score
-    if (b.amount !== a.amount) return b.amount - a.amount
-    return (a.tx.dateIso || '').localeCompare(b.tx.dateIso || '')
-  })
-
-  return candidates
-}
-
-function toIsoDateFromSparkasse(value) {
-  const s = String(value || '').trim()
-  if (!s) return ''
-
-  // YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s
-
-  // DD.MM.YYYY
-  let m = s.match(/^(\d{2})\.(\d{2})\.(\d{4})$/)
-  if (m) {
-    const [, dd, mm, yyyy] = m
-    return `${yyyy}-${mm}-${dd}`
-  }
-
-  // DD.MM.YY (Sparkasse often uses 2-digit year)
-  m = s.match(/^(\d{2})\.(\d{2})\.(\d{2})$/)
-  if (m) {
-    const [, dd, mm, yy] = m
-    const y = Number(yy)
-    const yyyy = (y <= 69 ? 2000 + y : 1900 + y)
-    return `${yyyy}-${mm}-${dd}`
-  }
-
-  return ''
-}
-
-function detectDelimiter(line) {
-  const semi = (line.match(/;/g) || []).length
-  const comma = (line.match(/,/g) || []).length
-  const tab = (line.match(/\t/g) || []).length
-  if (tab >= semi && tab >= comma) return '\t'
-  if (semi >= comma) return ';'
-  return ','
-}
-
-function normalizeHeaderCell(value) {
-  return String(value || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
-}
-
-function parseCsv(text) {
-  const rows = String(text || '')
-    .replace(/^\uFEFF/, '')
-    .split(/\r?\n/)
-    .filter(r => r.trim().length > 0)
-
-  if (!rows.length) return []
-  const delim = detectDelimiter(rows[0])
-
-  // Simple CSV split (Sparkasse exports are usually simple, no multiline fields)
-  const splitRow = (row) => {
-    const out = []
-    let cur = ''
-    let inQuotes = false
-    for (let i = 0; i < row.length; i++) {
-      const ch = row[i]
-      if (ch === '"') {
-        if (inQuotes && row[i + 1] === '"') { cur += '"'; i++; continue }
-        inQuotes = !inQuotes
-        continue
-      }
-      if (!inQuotes && ch === delim) {
-        out.push(cur)
-        cur = ''
-        continue
-      }
-      cur += ch
-    }
-    out.push(cur)
-    return out.map(x => x.trim())
-  }
-
-  const header = splitRow(rows[0]).map(normalizeHeaderCell)
-  const dataRows = rows.slice(1).map(splitRow)
-
-  const idx = (exactNames, partialNames = exactNames) => {
-    const normalizedExact = exactNames.map(normalizeHeaderCell)
-    const normalizedPartial = partialNames.map(normalizeHeaderCell)
-
-    const exactIdx = header.findIndex(h => normalizedExact.includes(h))
-    if (exactIdx >= 0) return exactIdx
-
-    return header.findIndex(h => normalizedPartial.some(n => h.includes(n)))
-  }
-
-  const dateIdx = idx(['buchungstag', 'buchungsdatum', 'date'])
-  const valutaIdx = idx(['valutadatum', 'valuta'])
-  const amountIdx = idx(['betrag', 'amount'])
-  const purposeIdx = idx(['verwendungszweck', 'zweck', 'purpose'])
-  const nameIdx = idx(
-    ['beguenstigter zahlungspflichtiger'],
-    ['begunstigter', 'beguenstigter', 'zahlungspflichtiger', 'auftraggeber', 'name']
-  )
-  const ibanIdx = idx(['kontonummer iban', 'iban'], ['iban', 'kontonummer'])
-
-  const tx = []
-  for (const r of dataRows) {
-    const bookingDateRaw = (r[dateIdx] || '').trim()
-    const valutaDateRaw = (r[valutaIdx] || '').trim()
-    const bookingDateIso = toIsoDateFromSparkasse(bookingDateRaw)
-    const valutaDateIso = toIsoDateFromSparkasse(valutaDateRaw)
-    const dateIso = bookingDateIso || valutaDateIso
-    const amount = parseGermanNumber(r[amountIdx])
-    const purpose = (r[purposeIdx] || '').trim()
-    const name = (r[nameIdx] || '').trim()
-    const iban = (r[ibanIdx] || '').trim()
-    if (!amount) continue
-    tx.push({
-      id: `${dateIso || bookingDateRaw || valutaDateRaw}|${amount}|${purpose}`.slice(0, 140),
-      dateIso,
-      bookingDateIso,
-      valutaDateIso,
-      suggestedPayDate: bookingDateIso || valutaDateIso || '',
-      bookingDateRaw,
-      valutaDateRaw,
-      amount,
-      purpose,
-      name,
-      iban
-    })
-  }
-  return tx
-}
-
-function isoDateToday() {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
-}
-
-function normalizeInvoiceNumber(s) {
-  return String(s || '').toUpperCase().replace(/\s+/g, '')
 }
 
 function getCurrentYear() { return new Date().getFullYear() }
@@ -648,17 +375,10 @@ export default function App() {
   const [configured, setConfigured] = useState(false)
   const [selectedYear, setSelectedYear] = useState(getCurrentYear())
   const [chartType, setChartType] = useState('netto') // netto | bezahlt | offen | ueberfaellig
-  const [view, setView] = useState('chart') // chart | table | overview | reconcile
+  const [view, setView] = useState('chart') // chart | table | overview | forderungen
 
-  // Reconcile state
+  // Token für die Forderungs-Datenbank (Admin- oder Lese-Token), bleibt im Browser gespeichert
   const [adminToken, setAdminToken] = useState(() => localStorage.getItem('bm_admin_token') || '')
-  const [transactions, setTransactions] = useState([])
-  const [openInvoices, setOpenInvoices] = useState([])
-  const [txQuery, setTxQuery] = useState('')
-  const [matchByInvoiceId, setMatchByInvoiceId] = useState({})
-  const [payDateByInvoiceId, setPayDateByInvoiceId] = useState({})
-  const [payDateTouchedByInvoiceId, setPayDateTouchedByInvoiceId] = useState({})
-  const [bookingBusyId, setBookingBusyId] = useState(null)
   const [overviewQuery, setOverviewQuery] = useState('')
   const [overviewStatusFilter, setOverviewStatusFilter] = useState('ALL')
 
@@ -669,66 +389,6 @@ export default function App() {
 
   const chartData = years.length ? yearToChartData(matrix, selectedYear, thisYear, thisMonth) : []
   const cumulativeYoYData = years.length ? yearToCumulativeYoYData(matrix, selectedYear, thisYear, thisMonth) : []
-
-  async function fetchOpenInvoices() {
-    const base = new URL('/.netlify/functions/billomat-invoices', window.location.origin)
-
-    const fetchStatus = async (st) => {
-      const url = new URL(base)
-      url.searchParams.set('status', st)
-      url.searchParams.set('includeClients', '1')
-      const res = await fetch(url)
-      const data = await res.json()
-        if (!res.ok || !data?.ok) throw new Error(data?.error || `HTTP ${res.status}`)
-      return Array.isArray(data.invoices) ? data.invoices : []
-    }
-
-    // OPEN + OVERDUE
-    const [open, overdue] = await Promise.all([
-      fetchStatus('OPEN'),
-      fetchStatus('OVERDUE')
-    ])
-    const merged = [...open, ...overdue]
-
-    // De-duplicate by id
-    const map = new Map()
-    for (const inv of merged) {
-      const id = String(inv.id || '')
-      if (!id) continue
-      map.set(id, inv)
-    }
-    return Array.from(map.values()).sort((a, b) => {
-      const ag = Number(a.total_gross || a.gross_total || 0)
-      const bg = Number(b.total_gross || b.gross_total || 0)
-      return ag - bg
-    })
-  }
-
-  async function bookPayment({ invoice, tx, payDate }) {
-    const url = new URL('/.netlify/functions/billomat-book-payment', window.location.origin)
-    const amount = Math.abs(Number(tx.amount))
-    const body = {
-      invoiceId: Number(invoice.id),
-      date: payDate,
-      amount,
-      comment: `Sparkasse: ${tx.purpose || ''}`.slice(0, 180),
-      type: 'BANK_TRANSFER',
-      markInvoiceAsPaid: true
-    }
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'x-admin-token': adminToken
-      },
-      body: JSON.stringify(body)
-    })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok || !data?.ok) {
-      throw new Error(data?.error || `HTTP ${res.status}`)
-    }
-    return data
-  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -776,33 +436,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('bm_admin_token', adminToken)
   }, [adminToken])
-
-  useEffect(() => {
-    if (!openInvoices.length || !transactions.length) return
-
-    const nextMatches = {}
-    const nextPayDates = {}
-
-    for (const inv of openInvoices) {
-      const invId = String(inv.id || '')
-      if (!invId || matchByInvoiceId[invId]) continue
-
-      const best = buildMatchCandidates(inv, transactions, txQuery)[0]
-      if (!best) continue
-
-      nextMatches[invId] = best.txId
-      if (!payDateTouchedByInvoiceId[invId] && best.tx.suggestedPayDate) {
-        nextPayDates[invId] = best.tx.suggestedPayDate
-      }
-    }
-
-    if (Object.keys(nextMatches).length) {
-      setMatchByInvoiceId(prev => ({ ...prev, ...nextMatches }))
-    }
-    if (Object.keys(nextPayDates).length) {
-      setPayDateByInvoiceId(prev => ({ ...prev, ...nextPayDates }))
-    }
-  }, [openInvoices, transactions, txQuery, matchByInvoiceId, payDateTouchedByInvoiceId])
 
   // Yearly summary for the table view
   const yearlyTable = years.map(y => {
@@ -1041,10 +674,10 @@ export default function App() {
               marginTop: 40, marginBottom: 20
             }}>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16 }}>
-                {view === 'reconcile' ? 'Zahlungen buchen' : view === 'overview' ? 'Kundenübersicht' : 'Monatliche Auswertung'}
+                {view === 'forderungen' ? 'Offene Forderungen' : view === 'overview' ? 'Kundenübersicht' : 'Monatliche Auswertung'}
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                {['chart', 'table', 'overview', 'reconcile'].map(v => (
+                {['chart', 'table', 'overview', 'forderungen'].map(v => (
                   <button key={v} onClick={() => setView(v)} style={{
                     padding: '6px 14px', borderRadius: 6,
                     border: view === v ? '1px solid var(--accent2)' : '1px solid var(--border)',
@@ -1052,13 +685,13 @@ export default function App() {
                     color: view === v ? 'var(--accent2)' : 'var(--text-muted)',
                     fontSize: 12
                   }}>
-                    {v === 'chart' ? '▦ Chart' : v === 'table' ? '≡ Tabelle' : v === 'overview' ? '⌕ Übersicht' : '✓ Buchen'}
+                    {v === 'chart' ? '▦ Chart' : v === 'table' ? '≡ Tabelle' : v === 'overview' ? '⌕ Übersicht' : '€ Forderungen'}
                   </button>
                 ))}
               </div>
             </div>
 
-            {view !== 'reconcile' && view !== 'overview' && (
+            {view !== 'forderungen' && view !== 'overview' && (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
                 {years.map(y => (
                   <YearTab
@@ -1454,264 +1087,8 @@ export default function App() {
               </div>
             )}
 
-            {view === 'reconcile' && (
-              <div style={{
-                background: 'var(--bg2)', border: '1px solid var(--border)',
-                borderRadius: 16, padding: 20
-              }}>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr',
-                  gap: 16
-                }}>
-                  <div style={{
-                    background: 'var(--bg3)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 12,
-                    padding: 16
-                  }}>
-                    <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, marginBottom: 10 }}>
-                      Sparkasse Datei (CSV)
-                    </div>
-                    <input
-                      type="file"
-                      accept=".csv,text/csv"
-                      onChange={async (e) => {
-                        const f = e.target.files?.[0]
-                        if (!f) return
-                        try {
-                          const buf = await f.arrayBuffer()
-                          const text = new TextDecoder('iso-8859-1').decode(buf)
-                          const tx = parseCsv(text)
-                          setTransactions(tx)
-                          setMatchByInvoiceId({})
-                          setPayDateByInvoiceId({})
-                          setPayDateTouchedByInvoiceId({})
-                          setStatus(`${tx.length} Sparkasse-Buchungen geladen ✓`)
-                          setError('')
-                        } catch (err) {
-                          setError(err.message || 'CSV konnte nicht gelesen werden')
-                        }
-                      }}
-                      style={{ width: '100%' }}
-                    />
-                    <div style={{ marginTop: 10, color: 'var(--text-muted)', fontSize: 12 }}>
-                      {transactions.length ? `${transactions.length} Zahlungseingänge geladen` : 'Noch keine Datei geladen.'}
-                    </div>
-                    <div style={{ marginTop: 8, color: 'var(--text-muted)', fontSize: 11, lineHeight: 1.6 }}>
-                      Erwartet Sparkasse CSV-CAMT mit Semikolon, ISO-8859-1 und Komma als Dezimaltrennzeichen.
-                      Vorgeschlagenes Zahlungsdatum kommt aus dem Buchungstag.
-                    </div>
-                    <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
-                      <label style={{ flex: 1, minWidth: 220 }}>
-                        <div style={{ fontSize: 11, letterSpacing: 1.5, color: 'var(--text-muted)', marginBottom: 6 }}>
-                          Suche in Sparkasse-Daten
-                        </div>
-                        <input
-                          value={txQuery}
-                          onChange={e => setTxQuery(e.target.value)}
-                          placeholder="z.B. RE-2026-001 oder Name"
-                          style={{
-                            width: '100%', padding: '10px 12px', borderRadius: 8,
-                            border: '1px solid var(--border)', background: 'var(--bg2)',
-                            color: 'var(--text)', fontSize: 13, outline: 'none'
-                          }}
-                        />
-                      </label>
-                      <label style={{ flex: 1, minWidth: 220 }}>
-                        <div style={{ fontSize: 11, letterSpacing: 1.5, color: 'var(--text-muted)', marginBottom: 6 }}>
-                          Admin-Token (zum Buchen)
-                        </div>
-                        <input
-                          type="password"
-                          value={adminToken}
-                          onChange={e => setAdminToken(e.target.value)}
-                          placeholder="(Netlify Env BILLOMAT_ADMIN_TOKEN)"
-                          style={{
-                            width: '100%', padding: '10px 12px', borderRadius: 8,
-                            border: '1px solid var(--border)', background: 'var(--bg2)',
-                            color: 'var(--text)', fontSize: 13, outline: 'none'
-                          }}
-                        />
-                      </label>
-                    </div>
-                    <div style={{ marginTop: 10, color: 'var(--text-muted)', fontSize: 11, lineHeight: 1.6 }}>
-                      Buchung nutzt Billomat API: <span style={{ color: 'var(--accent2)' }}>POST /api/invoice-payments</span> (Zahlart: BANK_TRANSFER).
-                    </div>
-                  </div>
-
-                  <div style={{
-                    background: 'var(--bg3)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 12,
-                    padding: 16
-                  }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                      <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700 }}>
-                        Offene Rechnungen (OPEN/OVERDUE)
-                      </div>
-                      <button
-                        onClick={async () => {
-                          setLoading(true)
-                          setError('')
-                          try {
-                            const list = await fetchOpenInvoices()
-                            setOpenInvoices(list)
-                            setStatus(`${list.length} offene Rechnungen geladen ✓`)
-                          } catch (e) {
-                            setError(e.message)
-                          } finally {
-                            setLoading(false)
-                          }
-                        }}
-                        disabled={loading}
-                        style={{
-                          padding: '8px 14px', borderRadius: 8,
-                          border: '1px solid var(--accent)',
-                          background: 'rgba(110,231,183,0.1)',
-                          color: 'var(--accent)', fontSize: 12,
-                          opacity: loading ? 0.6 : 1
-                        }}
-                      >
-                        ↻ Offene laden
-                      </button>
-                    </div>
-
-                    {openInvoices.length === 0 ? (
-                      <div style={{ marginTop: 12, color: 'var(--text-muted)', fontSize: 12 }}>
-                        Klicke “Offene laden”.
-                      </div>
-                    ) : (
-                      <div style={{ overflowX: 'auto', marginTop: 12 }}>
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                          <thead>
-                            <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                              <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>RE</th>
-                              <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>Rg.-Datum</th>
-                              <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>Kd.-Nr.</th>
-                              <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>Kunde</th>
-                              <th style={{ padding: '10px 8px', textAlign: 'right', color: 'var(--text-muted)' }}>Brutto</th>
-                              <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>Status</th>
-                              <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>Match (Sparkasse)</th>
-                              <th style={{ padding: '10px 8px', textAlign: 'left', color: 'var(--text-muted)' }}>Bezahldatum</th>
-                              <th style={{ padding: '10px 8px', textAlign: 'right', color: 'var(--text-muted)' }}>Aktion</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {openInvoices.map(inv => {
-                              const invId = String(inv.id)
-                              const invNo = normalizeInvoiceNumber(inv.invoice_number || inv.number || '')
-                              const invoiceDate = String(inv.invoice_date || inv.date || '')
-                              const customerNumber = extractCustomerNumber(inv)
-                              const client = String(inv.client_name || inv.client || '')
-                              const gross = parseFloat(inv.total_gross || inv.gross_total || 0)
-                              const st = String(inv.status || '').toUpperCase()
-                              const selectedTxId = matchByInvoiceId[invId] || ''
-                              const suggested = buildMatchCandidates(inv, transactions, txQuery)
-                              const selectedCandidate = suggested.find(item => item.txId === selectedTxId) || suggested[0] || null
-                              const selectedTx = selectedCandidate?.tx || transactions.find(t => t.id === selectedTxId) || null
-                              const payDate = payDateByInvoiceId[invId] || selectedTx?.suggestedPayDate || isoDateToday()
-
-                              return (
-                                <tr key={invId} style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                                  <td style={{ padding: '10px 8px', color: 'var(--text)' }}>{inv.invoice_number || inv.number || invId}</td>
-                                  <td style={{ padding: '10px 8px', color: 'var(--text-dim)', whiteSpace: 'nowrap' }}>{fmtDate(invoiceDate)}</td>
-                                  <td style={{ padding: '10px 8px', color: 'var(--text-dim)' }}>{customerNumber || '—'}</td>
-                                  <td style={{ padding: '10px 8px', color: 'var(--text-dim)' }}>{client}</td>
-                                  <td style={{ padding: '10px 8px', textAlign: 'right', color: 'var(--text)' }}>{fmt(gross)}</td>
-                                  <td style={{ padding: '10px 8px', color: st === 'OVERDUE' ? 'var(--danger)' : 'var(--accent2)' }}>{st}</td>
-                                  <td style={{ padding: '10px 8px' }}>
-                                    <select
-                                      value={selectedTxId}
-                                      onChange={e => {
-                                        const newTxId = e.target.value
-                                        setMatchByInvoiceId(prev => ({ ...prev, [invId]: newTxId }))
-
-                                        const txSel = suggested.find(item => item.txId === newTxId)?.tx || transactions.find(t => t.id === newTxId) || null
-                                        const touched = Boolean(payDateTouchedByInvoiceId[invId])
-                                        if (txSel?.suggestedPayDate && !touched) {
-                                          setPayDateByInvoiceId(prev => ({ ...prev, [invId]: txSel.suggestedPayDate }))
-                                        }
-                                      }}
-                                      style={{
-                                        width: '100%', minWidth: 260,
-                                        padding: '8px 10px', borderRadius: 8,
-                                        border: '1px solid var(--border)', background: 'var(--bg2)',
-                                        color: 'var(--text)', fontSize: 12
-                                      }}
-                                    >
-                                      <option value="">— auswählen —</option>
-                                      {suggested.slice(0, 50).map(match => (
-                                        <option key={match.txId} value={match.txId}>
-                                          {`${match.score}% ${match.reason} • ${match.tx.bookingDateIso || match.tx.bookingDateRaw || '—'} • ${fmt(Math.abs(match.tx.amount))} • ${(match.tx.purpose || match.tx.name || '').slice(0, 50)}`}
-                                        </option>
-                                      ))}
-                                    </select>
-                                    <div style={{ marginTop: 6, fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                                      {selectedCandidate
-                                        ? `${scoreLabel(selectedCandidate.score)}e Konfidenz (${selectedCandidate.score}%) - ${selectedCandidate.reason}`
-                                        : suggested.length
-                                          ? `${suggested.length} mögliche Treffer`
-                                          : 'Kein passender Treffer nach Regeln 1-5 gefunden.'}
-                                    </div>
-                                  </td>
-                                  <td style={{ padding: '10px 8px' }}>
-                                    <input
-                                      type="date"
-                                      value={payDate}
-                                      onChange={e => {
-                                        setPayDateTouchedByInvoiceId(prev => ({ ...prev, [invId]: true }))
-                                        setPayDateByInvoiceId(prev => ({ ...prev, [invId]: e.target.value }))
-                                      }}
-                                      style={{
-                                        padding: '8px 10px', borderRadius: 8,
-                                        border: '1px solid var(--border)', background: 'var(--bg2)',
-                                        color: 'var(--text)', fontSize: 12
-                                      }}
-                                    />
-                                  </td>
-                                  <td style={{ padding: '10px 8px', textAlign: 'right' }}>
-                                    <button
-                                      onClick={async () => {
-                                        if (!adminToken) { setError('Admin-Token fehlt'); return }
-                                        if (!selectedTx) { setError('Kein Sparkasse-Match ausgewählt'); return }
-                                        const ok = window.confirm(`Zahlung buchen?\n${inv.invoice_number || invId} ← ${selectedTx.bookingDateIso || selectedTx.bookingDateRaw || selectedTx.dateIso || '—'} ${fmt(Math.abs(selectedTx.amount))}`)
-                                        if (!ok) return
-                                        setBookingBusyId(invId)
-                                        setError('')
-                                        try {
-                                          await bookPayment({ invoice: inv, tx: selectedTx, payDate })
-                                          setStatus(`Gebucht: ${inv.invoice_number || invId} ✓`)
-                                          // remove from list optimistically
-                                          setOpenInvoices(prev => prev.filter(x => String(x.id) !== invId))
-                                        } catch (e) {
-                                          setError(e.message)
-                                        } finally {
-                                          setBookingBusyId(null)
-                                        }
-                                      }}
-                                      disabled={bookingBusyId === invId}
-                                      style={{
-                                        padding: '8px 12px', borderRadius: 8,
-                                        border: '1px solid var(--accent2)',
-                                        background: 'rgba(129,140,248,0.12)',
-                                        color: 'var(--accent2)', fontSize: 12,
-                                        opacity: bookingBusyId === invId ? 0.6 : 1
-                                      }}
-                                    >
-                                      {bookingBusyId === invId ? '…' : 'Zahlung buchen'}
-                                    </button>
-                                  </td>
-                                </tr>
-                              )
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+            {view === 'forderungen' && (
+              <ForderungenView adminToken={adminToken} setAdminToken={setAdminToken} setStatus={setStatus} setError={setError} />
             )}
           </>
         )}

@@ -39,5 +39,21 @@ Antwort:
 - `?format=text` für eine kompakte Textliste
 - Datenquelle der geplanten Claude-Aufgabe „Zahlungserinnerungen" (Gmail-Entwürfe, Tagesaktionen)
 
+## Forderungs-Datenbank (Supabase) – Spiegel der offenen Rechnungen
+Billomat gleicht die Sparkasse-Eingänge selbst ab. Die Supabase-Tabellen `billomat_*` (Projekt `onlinecert`)
+spiegeln täglich die offenen Rechnungen und halten Mahnstand, Zahlungen, Notizen und Mahnsperren.
+
+Env Vars (Netlify): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (nur serverseitig; RLS ist aktiv, anon hat keinen Zugriff).
+
+- `/.netlify/functions/billomat-sync` – Scheduled Function, täglich 04:20 UTC (`netlify.toml`); nicht per HTTP erreichbar
+- `/.netlify/functions/billomat-sync-now` – Abgleich sofort (GET, Header `x-admin-token`: Admin- oder `FAELLIG_TOKEN`)
+- `/.netlify/functions/billomat-forderungen` – GET Liste inkl. Mahnstand und Vorschlag für die nächste Stufe (`?format=text`, `?detail=1`, `?alle=1`);
+  POST `{aktion: 'mahnung'|'mahnung_status'|'notiz'|'sperre'|'kontakt'|'erledigt', …}` (Token wie oben, `erledigt` nur Admin)
+- Dashboard-Reiter „Forderungen“ liest diese Funktion; der frühere CSV-Buchen-Bereich ist entfallen
+
+Tabellen: `billomat_rechnungen`, `billomat_mahnungen` (Stufe 0 Nachfrage, 1 Zahlungserinnerung, 2 1. Mahnung, 3 2. Mahnung, 4 letzte Frist),
+`billomat_zahlungen`, `billomat_notizen`, `billomat_sync_log`; Sicht `billomat_offene_forderungen`.
+Der tägliche Mahnlauf (geplante Claude-Aufgabe) liest die Liste von hier und meldet Entwürfe/gesendete Stufen per POST zurück.
+
 ## Proxy für Google Apps Script
 - `/billomat-api/*` → Billomat-API (Header `x-admin-token`), siehe `netlify/functions/billomat-proxy.js`

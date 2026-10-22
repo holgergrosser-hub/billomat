@@ -5,6 +5,11 @@
 [functions]
   directory = "netlify/functions"
 
+# Täglicher Abgleich Billomat → Supabase (04:20 UTC = 05:20/06:20 deutsche Zeit, vor dem Mahnlauf).
+# Manuell: /.netlify/functions/billomat-sync-now mit x-admin-token.
+[functions."billomat-sync"]
+  schedule = "20 4 * * *"
+
 [build.environment]
   NODE_VERSION = "18"
 
