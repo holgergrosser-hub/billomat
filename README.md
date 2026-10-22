@@ -44,6 +44,8 @@ Billomat gleicht die Sparkasse-Eingänge selbst ab. Die Supabase-Tabellen `billo
 spiegeln täglich die offenen Rechnungen und halten Mahnstand, Zahlungen, Notizen und Mahnsperren.
 
 Env Vars (Netlify): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (nur serverseitig; RLS ist aktiv, anon hat keinen Zugriff).
+Tokens: `BILLOMAT_ADMIN_TOKEN` (alles), `FAELLIG_TOKEN` (Mahnlauf), `MAHN_TOKEN` (externe Mahnkraft – eigener Token, zum Sperren einfach die Variable löschen).
+Direktlink für die Mahnkraft: `https://billomat-umsatz.netlify.app/?view=forderungen`
 
 - `/.netlify/functions/billomat-sync` – Scheduled Function, täglich 04:20 UTC (`netlify.toml`); nicht per HTTP erreichbar
 - `/.netlify/functions/billomat-sync-now` – Abgleich sofort (GET, Header `x-admin-token`: Admin- oder `FAELLIG_TOKEN`)

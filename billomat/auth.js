@@ -14,18 +14,28 @@ function providedToken(event) {
 }
 
 /**
- * Prüft den Token. Gültig sind BILLOMAT_ADMIN_TOKEN (schreibend) und – wenn
- * allowReadToken=true – zusätzlich FAELLIG_TOKEN (nur lesend / Mahnlauf).
- * Rückgabe: 'admin' | 'read' | null
+ * Prüft den Token. Gültig sind
+ * - BILLOMAT_ADMIN_TOKEN  → 'admin' (alles, auch Buchen/Erledigt)
+ * - FAELLIG_TOKEN         → 'read'  (Mahnlauf: lesen, Mahnungen/Notizen/Sperren schreiben)
+ * - MAHN_TOKEN            → 'mahn'  (externe Mahnkraft: wie 'read', eigener Token, einzeln sperrbar)
+ * Die beiden letzten nur, wenn allowReadToken=true.
+ * Rückgabe: 'admin' | 'read' | 'mahn' | null
  */
 function authorize(event, { allowReadToken = true } = {}) {
   const admin = String(process.env.BILLOMAT_ADMIN_TOKEN || '').trim();
   const read = String(process.env.FAELLIG_TOKEN || '').trim();
+  const mahn = String(process.env.MAHN_TOKEN || '').trim();
   const given = providedToken(event);
   if (!given) return null;
   if (admin && given === admin) return 'admin';
   if (allowReadToken && read && given === read) return 'read';
+  if (allowReadToken && mahn && given === mahn) return 'mahn';
   return null;
 }
 
-module.exports = { headerValue, providedToken, authorize };
+/** Standard-Autor/Quelle je Rolle für Notizen und Mahnungen */
+function autorFuer(role) {
+  return role === 'admin' ? 'holger' : role === 'mahn' ? 'mahnkraft' : 'mahnlauf';
+}
+
+module.exports = { headerValue, providedToken, authorize, autorFuer };

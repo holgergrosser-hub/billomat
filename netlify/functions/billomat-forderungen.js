@@ -3,7 +3,7 @@
  * inkl. Mahnstand, Notizen und Vorschlag für die nächste Mahnstufe.
  *
  * GET  /.netlify/functions/billomat-forderungen
- *      Header x-admin-token: <BILLOMAT_ADMIN_TOKEN | FAELLIG_TOKEN>  (oder ?token=…)
+ *      Header x-admin-token: <BILLOMAT_ADMIN_TOKEN | FAELLIG_TOKEN | MAHN_TOKEN>  (oder ?token=…)
  *      ?format=text      kompakte Textliste
  *      ?detail=1         zusätzlich Mahnhistorie und Notizen je Rechnung
  *      ?alle=1           auch erledigte/bezahlte Rechnungen der letzten 60 Tage
@@ -23,7 +23,7 @@
 
 'use strict';
 
-const { authorize } = require('../../billomat/auth');
+const { authorize, autorFuer } = require('../../billomat/auth');
 const sb = require('../../billomat/supabase-rest');
 
 function response(statusCode, body, contentType) {
@@ -174,7 +174,7 @@ async function handlePost(event, role) {
       gesendet_am: status === 'gesendet' ? (body.gesendet_am || todayIso()) : null,
       betreff: body.betreff || null, kanal: body.kanal || 'gmail',
       gmail_thread: body.gmail_thread || null, gmail_draft_id: body.gmail_draft_id || null,
-      empfaenger: body.empfaenger || null, quelle: body.quelle || (role === 'read' ? 'mahnlauf' : 'dashboard'),
+      empfaenger: body.empfaenger || null, quelle: body.quelle || autorFuer(role),
       kommentar: body.kommentar || null
     };
     const inserted = await sb.insert('billomat_mahnungen', [row]);
@@ -194,7 +194,7 @@ async function handlePost(event, role) {
   if (aktion === 'notiz') {
     const text = String(body.text || '').trim();
     if (!re || !text) return json(400, { ok: false, error: 'rechnungsnummer und text erforderlich' });
-    const inserted = await sb.insert('billomat_notizen', [{ rechnungsnummer: re, text, autor: body.autor || (role === 'read' ? 'mahnlauf' : 'holger'), quelle: body.quelle || (role === 'read' ? 'mahnlauf' : 'dashboard') }]);
+    const inserted = await sb.insert('billomat_notizen', [{ rechnungsnummer: re, text, autor: body.autor || autorFuer(role), quelle: body.quelle || (role === 'read' ? 'mahnlauf' : 'dashboard') }]);
     return json(200, { ok: true, notiz: inserted[0] });
   }
 

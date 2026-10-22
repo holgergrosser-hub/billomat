@@ -375,7 +375,11 @@ export default function App() {
   const [configured, setConfigured] = useState(false)
   const [selectedYear, setSelectedYear] = useState(getCurrentYear())
   const [chartType, setChartType] = useState('netto') // netto | bezahlt | offen | ueberfaellig
-  const [view, setView] = useState('chart') // chart | table | overview | forderungen
+  const [view, setView] = useState(() => {
+    // Direktlink für die Mahnkraft: …/?view=forderungen
+    const v = new URLSearchParams(window.location.search).get('view')
+    return ['chart', 'table', 'overview', 'forderungen'].includes(v) ? v : 'chart'
+  }) // chart | table | overview | forderungen
 
   // Token für die Forderungs-Datenbank (Admin- oder Lese-Token), bleibt im Browser gespeichert
   const [adminToken, setAdminToken] = useState(() => localStorage.getItem('bm_admin_token') || '')
