@@ -146,6 +146,9 @@ export default function ForderungenView({ adminToken, setAdminToken, setStatus, 
               <span>Offen gesamt <strong style={{ color: 'var(--text)' }}>{euro(data.summe_offen)}</strong> ({data.anzahl})</span>
               <span>davon überfällig <strong style={{ color: 'var(--danger)' }}>{euro(data.summe_ueberfaellig)}</strong></span>
               <span style={{ color: 'var(--text-muted)' }}>Stand {data.stand}</span>
+              <span style={{ padding: '2px 8px', borderRadius: 6, background: data.rolle === 'admin' ? 'rgba(110,231,183,0.14)' : 'rgba(251,191,36,0.14)', color: data.rolle === 'admin' ? 'var(--accent)' : '#fbbf24' }}>
+                Token: {data.rolle === 'admin' ? 'Admin' : data.rolle === 'mahn' ? 'Mahnkraft' : 'Mahnlauf (Lese-Token)'}
+              </span>
             </div>
           )}
         </div>

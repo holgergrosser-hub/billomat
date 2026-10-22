@@ -118,13 +118,14 @@ function toText(result) {
   return lines.join('\n');
 }
 
-async function handleGet(event) {
+async function handleGet(event, role) {
   const q = event.queryStringParameters || {};
   const rows = await sb.select('billomat_offene_forderungen', { select: '*', order: 'tage_ueberfaellig.desc,rechnungsnummer.asc' });
   const rechnungen = rows.map(enrich);
 
   const result = {
     ok: true,
+    rolle: role,
     stand: todayIso(),
     anzahl: rechnungen.length,
     summe_offen: Math.round(rechnungen.reduce((s, r) => s + r.offen, 0) * 100) / 100,
@@ -231,7 +232,7 @@ exports.handler = async (event) => {
   const role = authorize(event);
   if (!role) return json(401, { ok: false, error: 'Unauthorized' });
   try {
-    if (event.httpMethod === 'GET') return await handleGet(event);
+    if (event.httpMethod === 'GET') return await handleGet(event, role);
     if (event.httpMethod === 'POST') return await handlePost(event, role);
     return json(405, { ok: false, error: 'Method not allowed' });
   } catch (e) {
