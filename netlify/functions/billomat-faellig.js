@@ -145,12 +145,16 @@ exports.handler = async (event) => {
     return jsonResponse(405, { ok: false, error: 'Method not allowed' });
   }
 
-  const requiredToken = String(process.env.BILLOMAT_ADMIN_TOKEN || '').trim();
-  if (!requiredToken) {
-    return jsonResponse(500, { ok: false, error: 'Server not configured: missing BILLOMAT_ADMIN_TOKEN' });
+  // Zwei gültige Token: der Admin-Token (schreibend, wie book-payment) und ein
+  // eigener Lese-Token FAELLIG_TOKEN für die geplante Claude-Aufgabe.
+  const validTokens = [process.env.BILLOMAT_ADMIN_TOKEN, process.env.FAELLIG_TOKEN]
+    .map((t) => String(t || '').trim())
+    .filter(Boolean);
+  if (!validTokens.length) {
+    return jsonResponse(500, { ok: false, error: 'Server not configured: missing BILLOMAT_ADMIN_TOKEN/FAELLIG_TOKEN' });
   }
   const providedToken = (headerValue(event.headers, 'x-admin-token') || event.queryStringParameters?.token || '').trim();
-  if (!providedToken || providedToken !== requiredToken) {
+  if (!providedToken || !validTokens.includes(providedToken)) {
     return jsonResponse(401, { ok: false, error: 'Unauthorized' });
   }
 

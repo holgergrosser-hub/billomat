@@ -34,7 +34,7 @@ Antwort:
 - Function (Mock): `BILLOMAT_MOCK=1` und dann über Netlify Dev oder direkt per Node testen.
 
 ## Fälligkeitsliste (Zahlungserinnerungen)
-- `/.netlify/functions/billomat-faellig` (GET, Header `x-admin-token` oder `?token=`)
+- `/.netlify/functions/billomat-faellig` (GET, Header `x-admin-token` oder `?token=`; gültig sind `BILLOMAT_ADMIN_TOKEN` und der Lese-Token `FAELLIG_TOKEN`)
 - Liefert offene/überfällige Rechnungen mit Kunde, E-Mail, Fälligkeit, Tagen überfällig und Mahnstufen-Vorschlag (5/14/28 Tage)
 - `?format=text` für eine kompakte Textliste
 - Datenquelle der geplanten Claude-Aufgabe „Zahlungserinnerungen" (Gmail-Entwürfe, Tagesaktionen)
