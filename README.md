@@ -19,7 +19,7 @@ Optional:
 - `BILLOMAT_MOCK=1`
 
 ### Endpoint
-- `/.netlify/functions/billomat-invoices`
+- `/.netlify/functions/billomat-invoices` – seit 23.10.2026 nur mit Admin-Token (Header `x-admin-token` oder `?token=`), weil die Antwort alle Rechnungen enthält
 
 Payment buchen:
 - `/.netlify/functions/billomat-book-payment` (POST, Header `x-admin-token`)
@@ -46,6 +46,7 @@ spiegeln täglich die offenen Rechnungen und halten Mahnstand, Zahlungen, Notize
 Env Vars (Netlify): `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (nur serverseitig; RLS ist aktiv, anon hat keinen Zugriff).
 Tokens: `BILLOMAT_ADMIN_TOKEN` (alles), `FAELLIG_TOKEN` (Mahnlauf), `MAHN_TOKEN` (externe Mahnkraft – eigener Token, zum Sperren einfach die Variable löschen).
 Direktlink für die Mahnkraft: `https://billomat-umsatz.netlify.app/?view=forderungen`
+Das Dashboard verlangt beim Öffnen ein Token: Admin-Token → komplettes Dashboard, Mahn-/Lese-Token → ausschließlich die Forderungsliste (keine Umsätze, keine KPIs).
 
 - `/.netlify/functions/billomat-sync` – Scheduled Function, täglich 04:20 UTC (`netlify.toml`); nicht per HTTP erreichbar
 - `/.netlify/functions/billomat-sync-now` – Abgleich sofort (GET, Header `x-admin-token`: Admin- oder `FAELLIG_TOKEN`)

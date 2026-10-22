@@ -134,7 +134,7 @@ function getCurrentYear() { return new Date().getFullYear() }
 
 // Fetch via Netlify Function (API key stays server-side)
 async function fetchInvoices(setStatus, options = {}) {
-  const { from = '', label = 'Lade Rechnungen…', includeClients = false } = options
+  const { from = '', label = 'Lade Rechnungen…', includeClients = false, token = '' } = options
   setStatus(label)
   const url = new URL('/.netlify/functions/billomat-invoices', window.location.origin)
   if (from) {
@@ -143,14 +143,25 @@ async function fetchInvoices(setStatus, options = {}) {
   if (includeClients) {
     url.searchParams.set('includeClients', '1')
   }
-  const res = await fetch(url)
+  const res = await fetch(url, { headers: { 'x-admin-token': token } })
   const text = await res.text()
   let data
   try { data = JSON.parse(text) } catch { data = { ok: false, error: text } }
   if (!res.ok || !data?.ok) {
-    throw new Error(data?.error || `HTTP ${res.status}`)
+    throw new Error(res.status === 401 ? 'Token ungültig oder keine Admin-Berechtigung' : (data?.error || `HTTP ${res.status}`))
   }
   return data.invoices || []
+}
+
+// Token beim Server prüfen → 'admin' | 'read' | 'mahn' | null
+async function verifyToken(token) {
+  if (!token) return null
+  const url = new URL('/.netlify/functions/billomat-forderungen', window.location.origin)
+  url.searchParams.set('rolle', '1')
+  const res = await fetch(url, { headers: { 'x-admin-token': token } })
+  if (!res.ok) return null
+  const data = await res.json().catch(() => ({}))
+  return data?.rolle || null
 }
 
 // Build month×year matrix from invoices
@@ -383,6 +394,9 @@ export default function App() {
 
   // Token für die Forderungs-Datenbank (Admin- oder Lese-Token), bleibt im Browser gespeichert
   const [adminToken, setAdminToken] = useState(() => localStorage.getItem('bm_admin_token') || '')
+  const [rolle, setRolle] = useState(null) // 'admin' | 'read' | 'mahn' | null – vom Server bestätigt
+  const [tokenInput, setTokenInput] = useState(() => localStorage.getItem('bm_admin_token') || '')
+  const [checkingToken, setCheckingToken] = useState(false)
   const [overviewQuery, setOverviewQuery] = useState('')
   const [overviewStatusFilter, setOverviewStatusFilter] = useState('ALL')
 
@@ -402,7 +416,8 @@ export default function App() {
       const data = await fetchInvoices(setStatus, {
         from: `${getCurrentYear()}-01-01`,
         label: `Lade Rechnungen ab 01.01.${getCurrentYear()}…`,
-        includeClients: true
+        includeClients: true,
+        token: adminToken
       })
       setInvoices(data)
       setStatus(`${data.length} Rechnungen geladen ✓`)
@@ -414,7 +429,7 @@ export default function App() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [adminToken])
 
   const loadAllInvoices = useCallback(async () => {
     setLoading(true)
@@ -423,7 +438,8 @@ export default function App() {
     try {
       const data = await fetchInvoices(setStatus, {
         label: 'Lade alle Rechnungsdaten…',
-        includeClients: true
+        includeClients: true,
+        token: adminToken
       })
       setInvoices(data)
       setStatus(`${data.length} Rechnungen vollständig geladen ✓`)
@@ -435,11 +451,34 @@ export default function App() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [adminToken])
 
   useEffect(() => {
     localStorage.setItem('bm_admin_token', adminToken)
   }, [adminToken])
+
+  // Token prüfen: Admin → Dashboard freischalten, Mahn-/Lese-Token → nur Forderungen
+  const anmelden = useCallback(async (token) => {
+    const t = String(token || '').trim()
+    setCheckingToken(true); setError('')
+    try {
+      const r = await verifyToken(t)
+      if (!r) { setRolle(null); setError('Token ungültig'); return null }
+      setAdminToken(t); setRolle(r)
+      if (r !== 'admin') { setView('forderungen'); setConfigured(true) }
+      return r
+    } catch (e) {
+      setError(e.message); return null
+    } finally {
+      setCheckingToken(false)
+    }
+  }, [])
+
+  useEffect(() => { if (adminToken) anmelden(adminToken) }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const abmelden = () => {
+    setAdminToken(''); setTokenInput(''); setRolle(null); setConfigured(false); setInvoices([]); setView('chart')
+  }
 
   // Yearly summary for the table view
   const yearlyTable = years.map(y => {
@@ -525,19 +564,25 @@ export default function App() {
         </div>
         {configured && (
           <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => { setConfigured(false); setInvoices([]) }} style={{
+            <button onClick={abmelden} style={{
+              padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border)',
+              background: 'transparent', color: 'var(--text-dim)', fontSize: 12
+            }}>
+              ⎋ Abmelden{rolle ? ` (${rolle === 'admin' ? 'Admin' : rolle === 'mahn' ? 'Mahnkraft' : 'Lese-Token'})` : ''}
+            </button>
+            {rolle === 'admin' && <button onClick={() => { setConfigured(false); setInvoices([]) }} style={{
               padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border)',
               background: 'transparent', color: 'var(--text-dim)', fontSize: 12
             }}>
               ⚙ Einstellungen
-            </button>
-            <button onClick={load} disabled={loading} style={{
+            </button>}
+            {rolle === 'admin' && <button onClick={load} disabled={loading} style={{
               padding: '8px 16px', borderRadius: 8, border: '1px solid var(--accent)',
               background: 'rgba(110,231,183,0.1)', color: 'var(--accent)', fontSize: 12,
               opacity: loading ? 0.5 : 1
             }}>
               ↻ Neu laden
-            </button>
+            </button>}
           </div>
         )}
       </div>
@@ -557,9 +602,32 @@ export default function App() {
             }}>
               Billomat Dashboard
             </div>
-            <div style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 28 }}>
-              Lädt Rechnungen über die Netlify Function <code style={{ color: 'var(--accent2)' }}>/.netlify/functions/billomat-invoices</code>.
+            <div style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 20 }}>
+              Zugang nur mit Token. Admin-Token: komplettes Dashboard. Mahn-Token: nur offene Forderungen.
             </div>
+
+            <form onSubmit={e => { e.preventDefault(); anmelden(tokenInput) }} style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+              <input
+                type="password"
+                value={tokenInput}
+                onChange={e => setTokenInput(e.target.value)}
+                placeholder="Token"
+                autoFocus
+                style={{
+                  flex: 1, padding: '12px 14px', borderRadius: 10,
+                  border: '1px solid var(--border)', background: 'var(--bg3)',
+                  color: 'var(--text)', fontSize: 14, outline: 'none'
+                }}
+              />
+              <button type="submit" disabled={checkingToken || !tokenInput.trim()} style={{
+                padding: '12px 18px', borderRadius: 10, border: '1px solid var(--accent2)',
+                background: 'rgba(129,140,248,0.12)', color: 'var(--accent2)',
+                fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 14,
+                opacity: checkingToken ? 0.5 : 1
+              }}>
+                {checkingToken ? '…' : rolle === 'admin' ? '✓ Admin' : 'Anmelden'}
+              </button>
+            </form>
 
             {error && (
               <div style={{
@@ -571,6 +639,7 @@ export default function App() {
               </div>
             )}
 
+            {rolle === 'admin' && (<>
             <button
               onClick={load}
               disabled={loading}
@@ -601,6 +670,7 @@ export default function App() {
             <div style={{ marginTop: 8, color: 'var(--text-dim)', fontSize: 11 }}>
               Lädt alle Rechnungen ohne Jahresfilter.
             </div>
+            </>)}
 
             <div style={{
               marginTop: 20, padding: '12px 16px',
@@ -608,14 +678,28 @@ export default function App() {
               border: '1px solid rgba(110,231,183,0.1)',
               color: 'var(--text-muted)', fontSize: 11, lineHeight: 1.6
             }}>
-              🔒 Keine Zugangsdaten im Browser. Der API-Key liegt als Netlify Env.
-              Nur GET-Anfragen – keinerlei Änderungen an deinen Daten.
+              🔒 Der Billomat-API-Key liegt nur in Netlify. Das Token wird im Browser gemerkt;
+              „Abmelden“ im Kopfbereich löscht es wieder.
             </div>
           </div>
         )}
 
-        {/* Dashboard */}
-        {configured && invoices.length > 0 && (
+        {/* Nur-Forderungen-Ansicht (Mahn-/Lese-Token) */}
+        {configured && rolle && rolle !== 'admin' && (
+          <div style={{ marginTop: 32 }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16, marginBottom: 20 }}>Offene Forderungen</div>
+            {error && (
+              <div style={{ background: 'rgba(248,113,113,0.1)', border: '1px solid var(--danger)', borderRadius: 8, padding: '10px 16px', marginBottom: 16, color: 'var(--danger)', fontSize: 12 }}>✗ {error}</div>
+            )}
+            {status && !error && (
+              <div style={{ background: 'rgba(110,231,183,0.08)', borderRadius: 8, padding: '8px 16px', marginBottom: 16, color: 'var(--accent)', fontSize: 12, textAlign: 'center' }}>{status}</div>
+            )}
+            <ForderungenView adminToken={adminToken} setAdminToken={setAdminToken} setStatus={setStatus} setError={setError} />
+          </div>
+        )}
+
+        {/* Dashboard (Admin) */}
+        {configured && rolle === 'admin' && invoices.length > 0 && (
           <>
             {/* Status Bar */}
             {status && (

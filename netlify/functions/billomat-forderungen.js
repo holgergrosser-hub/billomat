@@ -120,6 +120,7 @@ function toText(result) {
 
 async function handleGet(event, role) {
   const q = event.queryStringParameters || {};
+  if (String(q.rolle || '') === '1') return json(200, { ok: true, rolle: role });
   const rows = await sb.select('billomat_offene_forderungen', { select: '*', order: 'tage_ueberfaellig.desc,rechnungsnummer.asc' });
   const rechnungen = rows.map(enrich);
 

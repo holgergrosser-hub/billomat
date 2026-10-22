@@ -19,6 +19,7 @@
 const path = require('path');
 const fs = require('fs');
 const { billomatGetJson } = require('../../billomat/billomat-api');
+const { authorize } = require('../../billomat/auth');
 
 function jsonResponse(statusCode, bodyObj, extraHeaders) {
   return {
@@ -26,7 +27,7 @@ function jsonResponse(statusCode, bodyObj, extraHeaders) {
     headers: {
       'content-type': 'application/json; charset=utf-8',
       'access-control-allow-origin': '*',
-      'access-control-allow-headers': 'content-type',
+      'access-control-allow-headers': 'content-type, x-admin-token',
       'access-control-allow-methods': 'GET,OPTIONS',
       ...extraHeaders
     },
@@ -414,6 +415,11 @@ exports.handler = async (event) => {
 
   if (event.httpMethod !== 'GET') {
     return jsonResponse(405, { ok: false, error: 'Method not allowed' });
+  }
+
+  // Seit 23.10.2026: nur noch mit Admin-Token (Header x-admin-token oder ?token=) – die Liste enthält alle Rechnungen.
+  if (authorize(event, { allowReadToken: false }) !== 'admin') {
+    return jsonResponse(401, { ok: false, error: 'Unauthorized' });
   }
 
   const qs = event.queryStringParameters || {};
