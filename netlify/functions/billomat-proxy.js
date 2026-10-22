@@ -26,6 +26,7 @@
 const { buildBaseUrl } = require('../../billomat/billomat-api');
 
 const FUNCTION_PREFIX = '/.netlify/functions/billomat-proxy';
+const REDIRECT_PREFIX = '/billomat-api';
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'DELETE']);
 
 function textResponse(statusCode, body, contentType) {
@@ -54,9 +55,13 @@ function headerValue(headers, name) {
 
 function billomatPathFromEvent(event) {
   // event.path ist nach dem Redirect z. B. "/.netlify/functions/billomat-proxy/api/clients"
+  // bzw. bei Aufruf über den Redirect die Original-Adresse "/billomat-api/api/clients"
   let path = String(event.path || '');
-  if (path.startsWith(FUNCTION_PREFIX)) {
-    path = path.slice(FUNCTION_PREFIX.length);
+  for (const prefix of [FUNCTION_PREFIX, REDIRECT_PREFIX]) {
+    if (path.startsWith(prefix)) {
+      path = path.slice(prefix.length);
+      break;
+    }
   }
   if (!path.startsWith('/')) path = '/' + path;
   return path;
