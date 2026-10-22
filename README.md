@@ -32,3 +32,12 @@ Antwort:
 ## Lokal
 - Frontend: `cd billomat/frontend; npm install; npm run dev`
 - Function (Mock): `BILLOMAT_MOCK=1` und dann über Netlify Dev oder direkt per Node testen.
+
+## Fälligkeitsliste (Zahlungserinnerungen)
+- `/.netlify/functions/billomat-faellig` (GET, Header `x-admin-token` oder `?token=`)
+- Liefert offene/überfällige Rechnungen mit Kunde, E-Mail, Fälligkeit, Tagen überfällig und Mahnstufen-Vorschlag (5/14/28 Tage)
+- `?format=text` für eine kompakte Textliste
+- Datenquelle der geplanten Claude-Aufgabe „Zahlungserinnerungen" (Gmail-Entwürfe, Tagesaktionen)
+
+## Proxy für Google Apps Script
+- `/billomat-api/*` → Billomat-API (Header `x-admin-token`), siehe `netlify/functions/billomat-proxy.js`
