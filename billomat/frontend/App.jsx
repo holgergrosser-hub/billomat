@@ -4,6 +4,7 @@ import {
   ResponsiveContainer, LineChart, Line, ReferenceLine, LabelList
 } from 'recharts'
 import ForderungenView from './ForderungenView'
+import HilfeView from './HilfeView'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const MONTHS_DE = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez']
@@ -397,6 +398,7 @@ export default function App() {
   const [rolle, setRolle] = useState(null) // 'admin' | 'read' | 'mahn' | null – vom Server bestätigt
   const [tokenInput, setTokenInput] = useState(() => localStorage.getItem('bm_admin_token') || '')
   const [checkingToken, setCheckingToken] = useState(false)
+  const [hilfe, setHilfe] = useState(false)
   const [overviewQuery, setOverviewQuery] = useState('')
   const [overviewStatusFilter, setOverviewStatusFilter] = useState('ALL')
 
@@ -562,8 +564,15 @@ export default function App() {
             Build 2026-07-08 B
           </div>
         </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={() => setHilfe(true)} style={{
+            padding: '8px 16px', borderRadius: 8, border: '1px solid rgba(251,191,36,0.5)',
+            background: 'rgba(251,191,36,0.1)', color: '#fbbf24', fontSize: 12
+          }}>
+            ? Hilfe
+          </button>
         {configured && (
-          <div style={{ display: 'flex', gap: 8 }}>
+          <>
             <button onClick={abmelden} style={{
               padding: '8px 16px', borderRadius: 8, border: '1px solid var(--border)',
               background: 'transparent', color: 'var(--text-dim)', fontSize: 12
@@ -583,8 +592,9 @@ export default function App() {
             }}>
               ↻ Neu laden
             </button>}
-          </div>
+          </>
         )}
+        </div>
       </div>
 
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px' }}>
@@ -694,7 +704,7 @@ export default function App() {
             {status && !error && (
               <div style={{ background: 'rgba(110,231,183,0.08)', borderRadius: 8, padding: '8px 16px', marginBottom: 16, color: 'var(--accent)', fontSize: 12, textAlign: 'center' }}>{status}</div>
             )}
-            <ForderungenView adminToken={adminToken} setAdminToken={setAdminToken} setStatus={setStatus} setError={setError} />
+            <ForderungenView adminToken={adminToken} setAdminToken={setAdminToken} setStatus={setStatus} setError={setError} onHilfe={() => setHilfe(true)} />
           </div>
         )}
 
@@ -1176,11 +1186,12 @@ export default function App() {
             )}
 
             {view === 'forderungen' && (
-              <ForderungenView adminToken={adminToken} setAdminToken={setAdminToken} setStatus={setStatus} setError={setError} />
+              <ForderungenView adminToken={adminToken} setAdminToken={setAdminToken} setStatus={setStatus} setError={setError} onHilfe={() => setHilfe(true)} />
             )}
           </>
         )}
       </div>
+      {hilfe && <HilfeView rolle={rolle} onClose={() => setHilfe(false)} />}
     </div>
   )
 }

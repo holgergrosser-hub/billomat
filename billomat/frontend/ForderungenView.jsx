@@ -30,7 +30,7 @@ const btnStyle = (color, bg) => ({
   background: bg, color, fontSize: 11, cursor: 'pointer', whiteSpace: 'nowrap'
 })
 
-export default function ForderungenView({ adminToken, setAdminToken, setStatus, setError }) {
+export default function ForderungenView({ adminToken, setAdminToken, setStatus, setError, onHilfe }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [filter, setFilter] = useState('')
@@ -40,6 +40,7 @@ export default function ForderungenView({ adminToken, setAdminToken, setStatus, 
   const [sperreText, setSperreText] = useState('')
   const [sperreBis, setSperreBis] = useState('')
   const [kontakt, setKontakt] = useState({})
+  const [erf, setErf] = useState({ stufe: '0', kanal: 'telefon', datum: new Date().toISOString().slice(0, 10), kommentar: '' })
   const [busy, setBusy] = useState(false)
 
   const api = useCallback(async (method, payload, query) => {
@@ -126,6 +127,7 @@ export default function ForderungenView({ adminToken, setAdminToken, setStatus, 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button onClick={load} disabled={loading || !adminToken} style={btnStyle('var(--accent)', 'rgba(110,231,183,0.1)')}>↻ Laden</button>
               <button onClick={syncNow} disabled={busy || !adminToken} style={btnStyle('var(--accent2)', 'rgba(129,140,248,0.12)')}>{busy ? '…' : '⇅ Jetzt mit Billomat abgleichen'}</button>
+              {onHilfe && <button onClick={onHilfe} style={btnStyle('#fbbf24', 'rgba(251,191,36,0.14)')}>? Hilfe / Anleitung</button>}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
@@ -264,6 +266,26 @@ export default function ForderungenView({ adminToken, setAdminToken, setStatus, 
                                     <input value={kontakt.anrede} onChange={e => setKontakt({ ...kontakt, anrede: e.target.value })} placeholder="Anrede (Herr/Frau)" style={inputStyle} />
                                     <input value={kontakt.nachname} onChange={e => setKontakt({ ...kontakt, nachname: e.target.value })} placeholder="Nachname" style={inputStyle} />
                                     <button disabled={busy} onClick={() => post({ aktion: 'kontakt', rechnungsnummer: r.rechnungsnummer, ...kontakt }, 'Kontakt gespeichert ✓')} style={btnStyle('var(--accent)', 'rgba(110,231,183,0.1)')}>Kontakt speichern</button>
+                                  </div>
+                                  <div style={{ fontWeight: 700, margin: '12px 0 6px', color: 'var(--text)' }}>Kontakt / Mahnung erfassen</div>
+                                  <div style={{ color: 'var(--text-muted)', fontSize: 11, marginBottom: 6 }}>Für Anrufe, eigene Mails oder Briefe. Entwürfe des Mahnlaufs, die du nur sendest, musst du nicht erfassen.</div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                    <select value={erf.stufe} onChange={e => setErf({ ...erf, stufe: e.target.value })} style={inputStyle}>
+                                      <option value="0">Anruf / Nachfrage (Stufe 0)</option>
+                                      <option value="1">Zahlungserinnerung (Stufe 1)</option>
+                                      <option value="2">1. Mahnung (Stufe 2)</option>
+                                      <option value="3">2. Mahnung (Stufe 3)</option>
+                                      <option value="4">Letzte Frist (Stufe 4)</option>
+                                    </select>
+                                    <select value={erf.kanal} onChange={e => setErf({ ...erf, kanal: e.target.value })} style={inputStyle}>
+                                      <option value="telefon">Telefon</option>
+                                      <option value="gmail">E-Mail</option>
+                                      <option value="whatsapp">WhatsApp</option>
+                                      <option value="brief">Brief</option>
+                                    </select>
+                                    <input type="date" value={erf.datum} onChange={e => setErf({ ...erf, datum: e.target.value })} style={inputStyle} />
+                                    <input value={erf.kommentar} onChange={e => setErf({ ...erf, kommentar: e.target.value })} placeholder="Vermerk (z. B. Fr. Zeck erreicht, zahlt bis 30.10.)" style={inputStyle} />
+                                    <button disabled={busy || !erf.datum} onClick={() => post({ aktion: 'mahnung', rechnungsnummer: r.rechnungsnummer, stufe: Number(erf.stufe), status: 'gesendet', gesendet_am: erf.datum, kanal: erf.kanal, kommentar: erf.kommentar.trim() || null, betreff: erf.stufe === '0' ? 'Kontakt' : undefined }, 'Erfasst ✓')} style={{ ...btnStyle('var(--accent2)', 'rgba(129,140,248,0.12)'), gridColumn: '1 / -1' }}>Erfassen</button>
                                   </div>
                                 </div>
                               </div>
