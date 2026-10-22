@@ -8,6 +8,13 @@
 [build.environment]
   NODE_VERSION = "18"
 
+# Billomat-Proxy für Google Apps Script (Cloudflare blockt Google-IPs, s. netlify/functions/billomat-proxy.js)
+[[redirects]]
+  from = "/billomat-api/*"
+  to = "/.netlify/functions/billomat-proxy/:splat"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
