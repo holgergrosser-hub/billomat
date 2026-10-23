@@ -15,6 +15,10 @@
  *      { aktion: 'sperre', rechnungsnummer, mahnsperre: string|null, mahnsperre_bis?: 'YYYY-MM-DD'|null }
  *      { aktion: 'kontakt', rechnungsnummer, email?, telefon?, mobil?, anrede?, vorname?, nachname? }
  *      { aktion: 'erledigt', rechnungsnummer, status?: 'PAID'|'CANCELED', bezahlt_am? }
+ *      { aktion: 'aufgabe', rechnungsnummer, zustaendig?: 'anke'|'holger'|'mahnlauf'|null, wiedervorlage?: 'YYYY-MM-DD'|null, naechster_schritt?, kategorie?: 'A'..'F'|null, hinweise? }
+ *      Strukturierte Notiz: { aktion: 'notiz', rechnungsnummer, erreicht?, gesagt?, zugesagt_bis?: 'YYYY-MM-DD', rechnung_an?, an_holger?, text? }
+ *        → setzt bei zugesagt_bis automatisch Mahnsperre bis dahin, Wiedervorlage = Folgetag, Zuständig = anke;
+ *          bei an_holger: Zuständig = holger, Wiedervorlage = heute.
  *
  * Mahnstufen: 0 Nachfrage/Kontakt, 1 Zahlungserinnerung, 2 1. Mahnung, 3 2. Mahnung, 4 letzte Frist.
  * Regeln (Tage ab Fälligkeit / seit letzter Stufe): 1 ab 5 Tagen; 2 ab 14 Tagen und >= 9 Tage nach Stufe 1;
@@ -82,9 +86,49 @@ function naechsteAktion(r) {
   return { stufe: 0, aktion: 'warten', text: `${STUFEN_NAME[gesendet]} vom ${formatDateDe(r.gesendet_am)} abwarten` };
 }
 
+function addDays(iso, n) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || ''));
+  if (!m) return null;
+  const d = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + n));
+  return d.toISOString().slice(0, 10);
+}
+function maxIso(a, b) { return !a ? b : !b ? a : (a > b ? a : b); }
+
+/** Wer ist dran und wann – explizit gesetzt oder aus der Regel abgeleitet */
+function zustaendigkeit(r, next) {
+  if (r.zustaendig) {
+    return { zustaendig: r.zustaendig, wiedervorlage: r.wiedervorlage || todayIso(), schritt: r.naechster_schritt || next.text, abgeleitet: false };
+  }
+  const heute = todayIso();
+  const ges = Number(r.gesendete_stufe || 0);
+  switch (next.aktion) {
+    case 'entwurf_vorhanden': return { zustaendig: 'anke', wiedervorlage: heute, schritt: 'Entwurf im Postfach prüfen und senden', abgeleitet: true };
+    case 'mahnung': return { zustaendig: 'mahnlauf', wiedervorlage: heute, schritt: `${next.text} – Entwurf kommt vom Mahnlauf, danach Anke: prüfen und senden`, abgeleitet: true };
+    case 'entscheidung': return { zustaendig: 'holger', wiedervorlage: heute, schritt: next.text, abgeleitet: true };
+    case 'email_fehlt': return { zustaendig: 'holger', wiedervorlage: heute, schritt: 'E-Mail-Adresse in Billomat nachtragen', abgeleitet: true };
+    case 'gesperrt': return { zustaendig: 'holger', wiedervorlage: r.mahnsperre_bis || heute, schritt: `Sperre prüfen: ${r.mahnsperre}`, abgeleitet: true };
+    case 'warten': {
+      let wv = null;
+      if (ges === 1) wv = maxIso(addDays(r.faellig, 14), addDays(r.gesendet_am, 9));
+      else if (ges === 2) wv = maxIso(addDays(r.faellig, 28), addDays(r.gesendet_am, 14));
+      else if (ges >= 3) wv = addDays(r.gesendet_am, 10);
+      else wv = addDays(r.faellig, 5);
+      return { zustaendig: 'mahnlauf', wiedervorlage: wv || heute, schritt: next.text, abgeleitet: true };
+    }
+    default: return { zustaendig: null, wiedervorlage: null, schritt: next.text, abgeleitet: true };
+  }
+}
+
 function enrich(r) {
   const next = naechsteAktion(r);
+  const z = zustaendigkeit(r, next);
   return {
+    zustaendig_effektiv: z.zustaendig,
+    wiedervorlage_effektiv: z.wiedervorlage,
+    wiedervorlage_effektiv_de: formatDateDe(z.wiedervorlage),
+    schritt_effektiv: z.schritt,
+    zustaendig_abgeleitet: z.abgeleitet,
+    wiedervorlage_faellig: Boolean(z.wiedervorlage) && z.wiedervorlage <= todayIso(),
     ...r,
     brutto: Number(r.brutto), bezahlt: Number(r.bezahlt), offen: Number(r.offen),
     datum_de: formatDateDe(r.datum),
@@ -106,13 +150,13 @@ function toText(result) {
   const lines = [];
   lines.push(`Stand ${result.stand} – ${result.anzahl} offene Rechnungen, offen gesamt ${formatEuro(result.summe_offen)}, davon überfällig ${formatEuro(result.summe_ueberfaellig)}`);
   lines.push('');
-  lines.push('Nr | Kunde | E-Mail | Telefon | Datum | Fällig | Offen | Tage überfällig | Gesendet | Nächste Aktion');
+  lines.push('Nr | Kunde | E-Mail | Telefon | Datum | Fällig | Offen | Tage überfällig | Gesendet | Nächste Aktion | Zuständig | Wiedervorlage | Nächster Schritt');
   for (const r of result.rechnungen) {
     lines.push([
       r.rechnungsnummer, r.kunde, r.email || '-', [r.telefon, r.mobil].filter(Boolean).join(' / ') || '-',
       r.datum_de, r.faellig_de, formatEuro(r.offen), r.tage_ueberfaellig,
       r.gesendete_stufe ? `${r.gesendete_stufe_name} ${r.gesendet_am_de}` : '-',
-      r.naechste_aktion_text
+      r.naechste_aktion_text, r.zustaendig_effektiv || '-', r.wiedervorlage_effektiv_de || '-', r.schritt_effektiv || ''
     ].join(' | '));
   }
   return lines.join('\n');
@@ -194,10 +238,63 @@ async function handlePost(event, role) {
   }
 
   if (aktion === 'notiz') {
-    const text = String(body.text || '').trim();
+    const teile = [];
+    const erreicht = String(body.erreicht || '').trim();
+    const gesagt = String(body.gesagt || '').trim();
+    const zugesagt = String(body.zugesagt_bis || '').trim();
+    const rechnungAn = String(body.rechnung_an || '').trim();
+    const anHolger = String(body.an_holger || '').trim();
+    const frei = String(body.text || '').trim();
+    if (erreicht) teile.push(`Erreicht: ${erreicht}`);
+    if (gesagt) teile.push(`Gesagt: ${gesagt}`);
+    if (zugesagt) teile.push(`Zahlung zugesagt bis ${formatDateDe(zugesagt)}`);
+    if (rechnungAn) teile.push(`Rechnung erneut senden an ${rechnungAn}`);
+    if (anHolger) teile.push(`An Holger: ${anHolger}`);
+    if (frei) teile.push(frei);
+    const text = teile.join(' · ');
     if (!re || !text) return json(400, { ok: false, error: 'rechnungsnummer und text erforderlich' });
     const inserted = await sb.insert('billomat_notizen', [{ rechnungsnummer: re, text, autor: body.autor || autorFuer(role), quelle: body.quelle || (role === 'read' ? 'mahnlauf' : 'dashboard') }]);
-    return json(200, { ok: true, notiz: inserted[0] });
+    // Folgen für Zuständigkeit / Wiedervorlage / Sperre
+    const patch = {};
+    if (zugesagt) {
+      patch.mahnsperre = `Zahlung zugesagt bis ${formatDateDe(zugesagt)}`;
+      patch.mahnsperre_bis = zugesagt;
+      patch.wiedervorlage = addDays(zugesagt, 1);
+      patch.zustaendig = 'anke';
+      patch.naechster_schritt = `Zahlungseingang prüfen (Abgleich drücken); Zusage bis ${formatDateDe(zugesagt)}${erreicht ? ' von ' + erreicht : ''}. Nicht eingegangen: anrufen.`;
+    }
+    if (anHolger) {
+      patch.zustaendig = 'holger';
+      patch.wiedervorlage = todayIso();
+      patch.naechster_schritt = `Von Anke: ${anHolger}`;
+    }
+    if (rechnungAn && !zugesagt && !anHolger) {
+      patch.zustaendig = 'holger';
+      patch.wiedervorlage = todayIso();
+      patch.naechster_schritt = `Rechnung ${re} erneut senden an ${rechnungAn}`;
+    }
+    let rechnung = null;
+    if (Object.keys(patch).length) {
+      const updated = await sb.update('billomat_rechnungen', patch, { rechnungsnummer: `eq.${re}` });
+      rechnung = updated[0] || null;
+    }
+    return json(200, { ok: true, notiz: inserted[0], rechnung });
+  }
+
+  if (aktion === 'aufgabe') {
+    if (!re) return json(400, { ok: false, error: 'rechnungsnummer erforderlich' });
+    const patch = {};
+    if (body.zustaendig !== undefined) patch.zustaendig = ['anke', 'holger', 'mahnlauf'].includes(body.zustaendig) ? body.zustaendig : null;
+    if (body.wiedervorlage !== undefined) patch.wiedervorlage = body.wiedervorlage || null;
+    if (body.naechster_schritt !== undefined) patch.naechster_schritt = body.naechster_schritt ? String(body.naechster_schritt).trim() : null;
+    if (body.kategorie !== undefined) patch.kategorie = ['A', 'B', 'C', 'D', 'E', 'F'].includes(body.kategorie) ? body.kategorie : null;
+    if (body.hinweise !== undefined) {
+      if (role !== 'admin' && role !== 'read') return json(403, { ok: false, error: 'Telefonblatt nur mit Admin-Token' });
+      patch.hinweise = body.hinweise ? String(body.hinweise).trim() : null;
+    }
+    if (!Object.keys(patch).length) return json(400, { ok: false, error: 'keine Felder' });
+    const updated = await sb.update('billomat_rechnungen', patch, { rechnungsnummer: `eq.${re}` });
+    return json(200, { ok: true, rechnung: updated[0] || null });
   }
 
   if (aktion === 'sperre') {

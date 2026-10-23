@@ -19,7 +19,8 @@ const H = {
       titel: '2. Die Liste lesen',
       text: [
         'Die Liste ist ein Spiegel der offenen Rechnungen aus Billomat. Sie wird jeden Morgen um 06:20 Uhr automatisch abgeglichen; bezahlte Rechnungen verschwinden von selbst. Mit „⇅ Jetzt mit Billomat abgleichen“ kannst du den Abgleich jederzeit selbst anstoßen (dauert ein paar Sekunden).',
-        'Spalten: RE = Rechnungsnummer mit Rechnungs- und Fälligkeitsdatum · Kunde = Firma, Kundennummer, Ansprechpartner · Kontakt = E-Mail und Telefon/Mobil · Offen = Restbetrag (bei Teilzahlung steht der ursprüngliche Betrag darunter) · Tage = Tage seit Fälligkeit (gelb ab 5, rot ab 28) · Gesendet = höchste bereits verschickte Mahnstufe mit Datum, darunter ggf. „Entwurf“, wenn eine Mahnung vorbereitet, aber noch nicht gesendet ist · Nächste Aktion = was das System als Nächstes vorsieht · Letzte Notiz = jüngster Eintrag aus den Gesprächen.',
+        'Oben unter „WER IST DRAN“ stehen Knöpfe für Alle, Anke, Holger und Mahnlauf mit der Zahl „heute fällig / gesamt“. Mit dem Mahn-Token ist „Anke“ schon vorausgewählt – du siehst nur, was du tun musst, sortiert nach Fälligkeit (älteste zuerst). „nur heute fällig“ blendet alles aus, was erst später dran ist.',
+        'Spalten: RE = Rechnungsnummer mit Rechnungs- und Fälligkeitsdatum · Kunde = Firma, Kundennummer, Ansprechpartner · Kontakt = E-Mail und Telefon/Mobil · Offen = Restbetrag (bei Teilzahlung steht der ursprüngliche Betrag darunter) · Tage = Tage seit Fälligkeit (gelb ab 5, rot ab 28) · Gesendet = höchste bereits verschickte Mahnstufe mit Datum, darunter ggf. „Entwurf“ · Wer · Wann · Was = wer die nächste Aktion macht (Anke/Holger/Mahnlauf), ab wann sie fällig ist („heute“ gelb, „seit …“ rot = überfällig, „ab …“ = später) und was genau zu tun ist; darunter klein der Mahnstand des Systems · Letzte Notiz = jüngster Eintrag aus den Gesprächen.',
         '„Nächste Aktion“ bedeutet: „Zahlungserinnerung/1. Mahnung/2. Mahnung senden“ = Mahnung ist fällig, der Entwurf liegt (ab dem nächsten Morgen) im Postfach · „… abwarten“ = Mahnung ist raus, Frist läuft noch · „Entwurf … liegt bereits in Gmail“ = bitte diesen Entwurf prüfen und senden · „Nicht mahnen: …“ = Mahnsperre, Grund steht dahinter · „Entscheidung: Inkasso/Mahnbescheid oder anrufen“ = alle Mahnstufen durch, Holger entscheidet · „E-Mail-Adresse fehlt in Billomat“ = Holger muss die Adresse in Billomat nachtragen.',
         'Das Häkchen „nur überfällige“ blendet Rechnungen aus, die noch nicht fällig sind. Die Suche findet Rechnungsnummer, Kunde, Kundennummer, E-Mail und Ansprechpartner.'
       ]
@@ -28,16 +29,17 @@ const H = {
       titel: '3. Dein Tagesablauf',
       text: [
         'Morgens: Im Postfach Mahnungen@iso9001.info liegen die vom Mahnlauf vorbereiteten Entwürfe (Betreff „Zahlungserinnerung – Rechnung RE…“, „1. Mahnung – …“, „2. Mahnung – …“). Jeden Entwurf kurz prüfen (richtiger Empfänger, Betrag stimmt mit der Liste überein) und senden. Du musst nichts eintragen – der Mahnlauf erkennt am nächsten Morgen, dass der Entwurf gesendet wurde.',
-        'Dann die Liste öffnen und telefonieren, in dieser Reihenfolge: zuerst Kunden mit gebrochener Zusage (siehe Notizen), dann die mit „Entscheidung“ oder langer Überfälligkeit, zuletzt die frisch Erinnerten (frühestens 4–5 Tage nach der Zahlungserinnerung anrufen).',
+        'Dann „Anke“ und „nur heute fällig“ wählen und die Liste von oben nach unten abarbeiten – die Reihenfolge ergibt sich aus der Wiedervorlage. Was erst „ab …“ fällig ist, bleibt liegen.',
         'Nach jedem Kontakt – auch nach einem erfolglosen Anrufversuch – sofort eine Notiz schreiben (Abschnitt 4) und den Kontakt erfassen (Abschnitt 6). Was nicht in der Liste steht, ist für Holger unsichtbar.',
-        'Vor dem Anruf immer „▼ Details“ öffnen: Dort stehen Mahnhistorie und alle bisherigen Notizen. Wer zweimal eine Zusage gebrochen hat, bekommt keine dritte ohne konkretes Datum.'
+        'Vor dem Anruf immer „▼ Details“ öffnen: Oben steht das Telefonblatt mit ZIEL DES ANRUFS, MÖGLICHEM EINSTIEG (wörtlich formuliert) und ACHTUNG (was schiefgehen kann), darunter Mahnhistorie und alle bisherigen Notizen. Wer zweimal eine Zusage gebrochen hat, bekommt keine dritte ohne konkretes Datum.',
+        'Nach dem Gespräch legst du unter „Nächste Aktion festlegen“ fest, wer als Nächstes dran ist und wann (z. B. Anke, 30.10., „erneut anrufen“). Damit taucht der Fall genau an diesem Tag wieder oben auf – du musst dir nichts merken.'
       ]
     },
     {
       titel: '4. Notiz schreiben',
       text: [
-        '„▼ Details“ öffnen, unten links „Neue Notiz“ ausfüllen, „Speichern“. Datum und dein Name (mahnkraft) werden automatisch ergänzt.',
-        'In jede Notiz gehört: Wen erreicht (Name, Funktion) · Was wurde gesagt, möglichst wörtlich · Zahlung zugesagt bis (Datum) · Soll die Rechnung erneut gesendet werden, an welche Adresse · Muss Holger etwas entscheiden.',
+        '„▼ Details“ öffnen, links unter „Notizen aus dem Gespräch“ die Felder ausfüllen (wie in der Telefonmappe): Erreicht am / mit wem · Was wurde gesagt (möglichst wörtlich) · Zahlung zugesagt bis (Datum) · Rechnung erneut senden an · An Holger geben, weil · Sonstiges. Leere Felder bleiben weg. „Notiz speichern“ – Datum und dein Name (mahnkraft) kommen automatisch dazu.',
+        'Das System zieht daraus die Folgen: Bei „Zahlung zugesagt bis“ wird bis zu diesem Datum nicht gemahnt und der Fall am Folgetag wieder dir vorgelegt („Zahlungseingang prüfen“). Bei „An Holger geben, weil“ ist ab sofort Holger dran. Bei „Rechnung erneut senden an“ bekommt Holger die Aufgabe, die Rechnung zu schicken.',
         'Beispiel: „Fr. Zeck erreicht. Rest 1.033,83 € wird bis 30.10. überwiesen, Rechnung erneut an buchhaltung@waagen-zeck.de schicken.“ – Beispiel bei Nichterreichen: „Festnetz 2x, Mobil 1x versucht, Sprachbox, keine Nachricht hinterlassen.“',
         'Nicht in die Notiz: eigene Vermutungen oder Urteile über den Kunden. Nur was gesagt und vereinbart wurde.'
       ]

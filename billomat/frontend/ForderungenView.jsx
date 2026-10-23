@@ -15,6 +15,50 @@ const AKTION_STYLE = {
   warten: { color: 'var(--text-muted)', bg: 'transparent' }
 }
 
+const PERSON = {
+  anke: { label: 'Anke', color: '#fbbf24', bg: 'rgba(251,191,36,0.16)' },
+  holger: { label: 'Holger', color: 'var(--danger)', bg: 'rgba(248,113,113,0.16)' },
+  mahnlauf: { label: 'Mahnlauf', color: 'var(--accent2)', bg: 'rgba(129,140,248,0.16)' }
+}
+
+const KATEGORIEN = {
+  A: { label: 'A – wartet auf BAFA', color: '#facc15' },
+  B: { label: 'B – inhaltlicher Einwand', color: '#f87171' },
+  C: { label: 'C – Rechnung nicht angekommen', color: '#fb923c' },
+  D: { label: 'D – keine Reaktion', color: '#60a5fa' },
+  E: { label: 'E – Lage ungeklärt', color: '#94a3b8' },
+  F: { label: 'F – Aufschub zugesagt', color: '#4ade80' }
+}
+
+// Aus der Telefonmappe (Regeln für alle Gespräche)
+const REGELN = [
+  'VOR jedem Anruf mit Holger klären, ob es WhatsApp- oder Telefonkontakt gab – Zusagen aus diesen Kanälen stehen in keiner Mail und heben Mahnungen auf.',
+  'Ziel ist immer ein konkretes Zahlungsdatum oder die Auskunft, was der Zahlung im Weg steht.',
+  'Keine Nachlässe, keine Ratenzahlung, keine neue Frist zusagen – das entscheidet nur Holger.',
+  'Keine Aussagen zu Verzugszinsen, Mahnverfahren, Inkasso oder rechtlichen Schritten – auch nicht auf Nachfrage.',
+  'Am Telefon niemals unsere Bankverbindung nennen oder bestätigen. Will ein Kunde die IBAN bestätigt haben: notieren, an Holger.',
+  'Bestreitet ein Kunde Leistung, Stunden oder Preis: freundlich beenden, Wortlaut notieren, an Holger. Nicht diskutieren.',
+  'Immer anbieten, die Rechnung nochmals per Mail zu schicken, und die richtige Rechnungsadresse erfragen.',
+  'Notieren, was gesagt wurde – möglichst wörtlich, nicht sinngemäß.'
+]
+
+function heuteIso() { return new Date().toISOString().slice(0, 10) }
+function deDate(iso) { return iso ? String(iso).slice(0, 10).split('-').reverse().join('.') : '' }
+
+// Hinweise-Text in Ziel / Einstieg / Achtung zerlegen
+function teileHinweise(text) {
+  const t = String(text || '')
+  const out = {}
+  const re = /(ZIEL|EINSTIEG|ACHTUNG):/g
+  const idx = []
+  let m
+  while ((m = re.exec(t))) idx.push({ key: m[1], start: m.index, end: re.lastIndex })
+  if (!idx.length) return t.trim() ? { SONST: t.trim() } : {}
+  if (idx[0].start > 0) out.SONST = t.slice(0, idx[0].start).trim()
+  idx.forEach((x, i) => { out[x.key] = t.slice(x.end, i + 1 < idx.length ? idx[i + 1].start : t.length).trim() })
+  return out
+}
+
 function euro(val) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(Number(val) || 0)
 }
@@ -37,6 +81,11 @@ export default function ForderungenView({ adminToken, setAdminToken, setStatus, 
   const [nurUeberfaellig, setNurUeberfaellig] = useState(true)
   const [openRow, setOpenRow] = useState(null)
   const [notizText, setNotizText] = useState('')
+  const [notiz, setNotiz] = useState({ erreicht: '', gesagt: '', zugesagt_bis: '', rechnung_an: '', an_holger: '' })
+  const [aufgabe, setAufgabe] = useState({ zustaendig: '', wiedervorlage: '', naechster_schritt: '', kategorie: '', hinweise: '' })
+  const [wer, setWer] = useState('alle') // alle | anke | holger | mahnlauf
+  const [nurHeute, setNurHeute] = useState(false)
+  const [regelnOffen, setRegelnOffen] = useState(false)
   const [sperreText, setSperreText] = useState('')
   const [sperreBis, setSperreBis] = useState('')
   const [kontakt, setKontakt] = useState({})
@@ -61,7 +110,10 @@ export default function ForderungenView({ adminToken, setAdminToken, setStatus, 
     setLoading(true); setError('')
     try {
       const body = await api('GET', null, { detail: '1', alle: '1' })
-      setData(body)
+      setData(prev => {
+        if (!prev && body.rolle === 'mahn') setWer('anke')
+        return body
+      })
       setStatus(`${body.anzahl} offene Forderungen geladen ✓ (Stand ${body.stand})`)
     } catch (e) {
       setError(e.message)
@@ -101,11 +153,25 @@ export default function ForderungenView({ adminToken, setAdminToken, setStatus, 
     }
   }
 
-  const rows = (data?.rechnungen || []).filter(r => {
-    if (nurUeberfaellig && Number(r.tage_ueberfaellig) < 1) return false
+  const heute = heuteIso()
+  const alle = data?.rechnungen || []
+  const zaehler = ['anke', 'holger', 'mahnlauf'].reduce((acc, p) => {
+    const mine = alle.filter(r => r.zustaendig_effektiv === p)
+    acc[p] = { gesamt: mine.length, heute: mine.filter(r => r.wiedervorlage_effektiv && r.wiedervorlage_effektiv <= heute).length }
+    return acc
+  }, {})
+  const rows = alle.filter(r => {
+    if (wer !== 'alle' && r.zustaendig_effektiv !== wer) return false
+    if (nurHeute && !(r.wiedervorlage_effektiv && r.wiedervorlage_effektiv <= heute)) return false
+    if (wer === 'alle' && nurUeberfaellig && Number(r.tage_ueberfaellig) < 1) return false
     if (!filter.trim()) return true
     const hay = `${r.rechnungsnummer} ${r.kunde} ${r.kundennummer || ''} ${r.email || ''} ${r.ansprechpartner || ''}`.toLowerCase()
     return hay.includes(filter.trim().toLowerCase())
+  }).sort((a, b) => {
+    const wa = a.wiedervorlage_effektiv || '9999-12-31'
+    const wb = b.wiedervorlage_effektiv || '9999-12-31'
+    if (wa !== wb) return wa < wb ? -1 : 1
+    return Number(b.tage_ueberfaellig) - Number(a.tage_ueberfaellig)
   })
 
   const card = { background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 12, padding: 16 }
@@ -153,6 +219,40 @@ export default function ForderungenView({ adminToken, setAdminToken, setStatus, 
               </span>
             </div>
           )}
+          {data && (
+            <div style={{ marginTop: 14, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+              <span style={{ fontSize: 11, letterSpacing: 1.5, color: 'var(--text-muted)', marginRight: 4 }}>WER IST DRAN</span>
+              {['alle', 'anke', 'holger', 'mahnlauf'].map(p => {
+                const aktiv = wer === p
+                const pc = PERSON[p] || { label: 'Alle', color: 'var(--text-dim)', bg: 'rgba(255,255,255,0.06)' }
+                return (
+                  <button key={p} onClick={() => setWer(p)} style={{
+                    padding: '6px 12px', borderRadius: 8, fontSize: 12, cursor: 'pointer',
+                    border: `1px solid ${aktiv ? pc.color : 'var(--border)'}`,
+                    background: aktiv ? pc.bg : 'transparent', color: aktiv ? pc.color : 'var(--text-muted)', fontWeight: aktiv ? 700 : 400
+                  }}>
+                    {pc.label}{p !== 'alle' && zaehler[p] ? ` · ${zaehler[p].heute} heute / ${zaehler[p].gesamt}` : ''}
+                  </button>
+                )
+              })}
+              <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--text-dim)', marginLeft: 8 }}>
+                <input type="checkbox" checked={nurHeute} onChange={e => setNurHeute(e.target.checked)} /> nur heute fällig
+              </label>
+              <button onClick={() => setRegelnOffen(!regelnOffen)} style={{ ...btnStyle('#fbbf24', 'rgba(251,191,36,0.1)'), marginLeft: 'auto' }}>
+                {regelnOffen ? '▲' : '▼'} Regeln für alle Gespräche
+              </button>
+            </div>
+          )}
+          {regelnOffen && (
+            <div style={{ marginTop: 12, padding: '12px 14px', borderRadius: 10, border: '1px solid rgba(251,191,36,0.4)', background: 'rgba(251,191,36,0.06)', fontSize: 12, lineHeight: 1.6 }}>
+              <ol style={{ margin: 0, paddingLeft: 18, color: 'var(--text-dim)' }}>
+                {REGELN.map((t, i) => <li key={i} style={{ marginBottom: 3 }}>{t}</li>)}
+              </ol>
+              <div style={{ marginTop: 8, color: 'var(--text-muted)', fontSize: 11 }}>
+                Kategorien: {Object.values(KATEGORIEN).map(k => <span key={k.label} style={{ color: k.color, marginRight: 12 }}>● {k.label}</span>)}
+              </div>
+            </div>
+          )}
         </div>
 
         <div style={card}>
@@ -171,7 +271,7 @@ export default function ForderungenView({ adminToken, setAdminToken, setStatus, 
                     <th style={{ ...th, textAlign: 'right' }}>Offen</th>
                     <th style={{ ...th, textAlign: 'right' }}>Tage</th>
                     <th style={th}>Gesendet</th>
-                    <th style={th}>Nächste Aktion</th>
+                    <th style={th}>Wer · Wann · Was</th>
                     <th style={th}>Letzte Notiz</th>
                     <th style={th}></th>
                   </tr>
@@ -210,10 +310,26 @@ export default function ForderungenView({ adminToken, setAdminToken, setStatus, 
                             ) : (r.letzter_kontakt ? <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>Nachfrage {r.letzter_kontakt.split('-').reverse().join('.')}</div> : '—')}
                             {r.entwurf_stufe > r.gesendete_stufe && <div style={{ color: '#fbbf24', fontSize: 11 }}>Entwurf: {STUFEN[r.entwurf_stufe]}</div>}
                           </td>
-                          <td style={td}>
-                            <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: 6, background: st.bg, color: st.color, fontSize: 11 }}>
-                              {r.naechste_aktion_text}
-                            </span>
+                          <td style={{ ...td, minWidth: 220 }}>
+                            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
+                              {r.zustaendig_effektiv && PERSON[r.zustaendig_effektiv] && (
+                                <span style={{ padding: '2px 8px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: PERSON[r.zustaendig_effektiv].bg, color: PERSON[r.zustaendig_effektiv].color }}>
+                                  {PERSON[r.zustaendig_effektiv].label}
+                                </span>
+                              )}
+                              {r.wiedervorlage_effektiv && (
+                                <span style={{ fontSize: 11, fontWeight: 600, color: r.wiedervorlage_effektiv < heute ? 'var(--danger)' : r.wiedervorlage_effektiv === heute ? '#fbbf24' : 'var(--text-muted)' }}>
+                                  {r.wiedervorlage_effektiv < heute ? `seit ${deDate(r.wiedervorlage_effektiv)}` : r.wiedervorlage_effektiv === heute ? 'heute' : `ab ${deDate(r.wiedervorlage_effektiv)}`}
+                                </span>
+                              )}
+                              {r.kategorie && KATEGORIEN[r.kategorie] && <span title={KATEGORIEN[r.kategorie].label} style={{ fontSize: 11, color: KATEGORIEN[r.kategorie].color }}>● {r.kategorie}</span>}
+                            </div>
+                            <div style={{ fontSize: 11.5, color: 'var(--text)', lineHeight: 1.45 }}>{r.schritt_effektiv}</div>
+                            {r.schritt_effektiv !== r.naechste_aktion_text && (
+                              <div style={{ marginTop: 3 }}>
+                                <span style={{ display: 'inline-block', padding: '1px 6px', borderRadius: 5, background: st.bg, color: st.color, fontSize: 10.5 }}>{r.naechste_aktion_text}</span>
+                              </div>
+                            )}
                           </td>
                           <td style={{ ...td, fontSize: 11, maxWidth: 260 }}>{r.letzte_notiz || '—'}</td>
                           <td style={{ ...td, textAlign: 'right' }}>
@@ -221,6 +337,8 @@ export default function ForderungenView({ adminToken, setAdminToken, setStatus, 
                               onClick={() => {
                                 setOpenRow(isOpen ? null : r.rechnungsnummer)
                                 setNotizText(''); setSperreText(r.mahnsperre || ''); setSperreBis(r.mahnsperre_bis || '')
+                                setNotiz({ erreicht: '', gesagt: '', zugesagt_bis: '', rechnung_an: '', an_holger: '' })
+                                setAufgabe({ zustaendig: r.zustaendig || r.zustaendig_effektiv || '', wiedervorlage: r.wiedervorlage || r.wiedervorlage_effektiv || '', naechster_schritt: r.naechster_schritt || '', kategorie: r.kategorie || '', hinweise: r.hinweise || '' })
                                 setKontakt({ email: r.email || '', telefon: r.telefon || '', mobil: r.mobil || '', anrede: r.anrede || '', nachname: r.nachname || '' })
                               }}
                               style={btnStyle('var(--text-dim)', 'transparent')}
@@ -230,6 +348,29 @@ export default function ForderungenView({ adminToken, setAdminToken, setStatus, 
                         {isOpen && (
                           <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.02)' }}>
                             <td colSpan={9} style={{ padding: '8px 12px 16px' }}>
+                              {(() => {
+                                const h = teileHinweise(r.hinweise)
+                                if (!Object.keys(h).length) return null
+                                const box = (titel, text, color) => text ? (
+                                  <div style={{ marginBottom: 8 }}>
+                                    <div style={{ fontSize: 10.5, letterSpacing: 1.5, color, fontWeight: 700, marginBottom: 2 }}>{titel}</div>
+                                    <div style={{ color: 'var(--text)', fontSize: 12.5, lineHeight: 1.55 }}>{text}</div>
+                                  </div>
+                                ) : null
+                                return (
+                                  <div style={{ margin: '4px 0 14px', padding: '12px 14px', borderRadius: 10, border: '1px solid rgba(251,191,36,0.35)', background: 'rgba(251,191,36,0.05)' }}>
+                                    <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
+                                      <span style={{ fontWeight: 700, color: 'var(--text)' }}>Telefonblatt</span>
+                                      {r.kategorie && KATEGORIEN[r.kategorie] && <span style={{ fontSize: 11, color: KATEGORIEN[r.kategorie].color }}>● {KATEGORIEN[r.kategorie].label}</span>}
+                                      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{[r.ansprechpartner, r.telefon, r.mobil].filter(Boolean).join(' · ')}</span>
+                                    </div>
+                                    {box('ZIEL DES ANRUFS', h.ZIEL, 'var(--accent)')}
+                                    {box('MÖGLICHER EINSTIEG', h.EINSTIEG ? h.EINSTIEG : null, 'var(--accent2)')}
+                                    {box('ACHTUNG', h.ACHTUNG, 'var(--danger)')}
+                                    {box('HINWEIS', h.SONST, 'var(--text-muted)')}
+                                  </div>
+                                )
+                              })()}
                               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, fontSize: 12 }}>
                                 <div>
                                   <div style={{ fontWeight: 700, marginBottom: 6, color: 'var(--text)' }}>Mahnhistorie</div>
@@ -245,13 +386,54 @@ export default function ForderungenView({ adminToken, setAdminToken, setStatus, 
                                       <span style={{ color: 'var(--text-muted)' }}>{String(n.erstellt).slice(0, 10).split('-').reverse().join('.')} {n.autor}:</span> {n.text}
                                     </div>
                                   ))}
-                                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                                    <input value={notizText} onChange={e => setNotizText(e.target.value)} placeholder="Neue Notiz" style={inputStyle} />
-                                    <button disabled={busy || !notizText.trim()} onClick={() => post({ aktion: 'notiz', rechnungsnummer: r.rechnungsnummer, text: notizText.trim() }, 'Notiz gespeichert ✓')} style={btnStyle('var(--accent)', 'rgba(110,231,183,0.1)')}>Speichern</button>
+                                  <div style={{ fontWeight: 700, margin: '12px 0 6px', color: 'var(--text)' }}>Notizen aus dem Gespräch</div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '150px 1fr', gap: 6, alignItems: 'center' }}>
+                                    <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Erreicht am / mit wem</span>
+                                    <input value={notiz.erreicht} onChange={e => setNotiz({ ...notiz, erreicht: e.target.value })} placeholder="z. B. Fr. Zeck (oder: nicht erreicht, 2x versucht)" style={inputStyle} />
+                                    <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Was wurde gesagt</span>
+                                    <input value={notiz.gesagt} onChange={e => setNotiz({ ...notiz, gesagt: e.target.value })} placeholder="möglichst wörtlich" style={inputStyle} />
+                                    <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Zahlung zugesagt bis</span>
+                                    <input type="date" value={notiz.zugesagt_bis} onChange={e => setNotiz({ ...notiz, zugesagt_bis: e.target.value })} style={inputStyle} />
+                                    <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Rechnung erneut senden an</span>
+                                    <input value={notiz.rechnung_an} onChange={e => setNotiz({ ...notiz, rechnung_an: e.target.value })} placeholder="E-Mail-Adresse" style={inputStyle} />
+                                    <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>An Holger geben, weil</span>
+                                    <input value={notiz.an_holger} onChange={e => setNotiz({ ...notiz, an_holger: e.target.value })} placeholder="z. B. bestreitet Stunden, will Ratenzahlung" style={inputStyle} />
+                                    <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>Sonstiges</span>
+                                    <input value={notizText} onChange={e => setNotizText(e.target.value)} placeholder="freier Text" style={inputStyle} />
                                   </div>
+                                  <div style={{ color: 'var(--text-muted)', fontSize: 10.5, margin: '6px 0' }}>
+                                    Zahlungszusage → Sperre bis zum Datum, Wiedervorlage am Folgetag (Anke). „An Holger“ → Holger ist dran, heute.
+                                  </div>
+                                  <button
+                                    disabled={busy || !(notiz.erreicht || notiz.gesagt || notiz.zugesagt_bis || notiz.rechnung_an || notiz.an_holger || notizText.trim())}
+                                    onClick={() => { post({ aktion: 'notiz', rechnungsnummer: r.rechnungsnummer, ...notiz, text: notizText.trim() }, 'Notiz gespeichert ✓'); setNotiz({ erreicht: '', gesagt: '', zugesagt_bis: '', rechnung_an: '', an_holger: '' }); setNotizText('') }}
+                                    style={{ ...btnStyle('var(--accent)', 'rgba(110,231,183,0.1)'), width: '100%' }}
+                                  >Notiz speichern</button>
                                 </div>
                                 <div>
-                                  <div style={{ fontWeight: 700, marginBottom: 6, color: 'var(--text)' }}>Mahnsperre</div>
+                                  <div style={{ fontWeight: 700, marginBottom: 6, color: 'var(--text)' }}>Nächste Aktion festlegen</div>
+                                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                                    <select value={aufgabe.zustaendig} onChange={e => setAufgabe({ ...aufgabe, zustaendig: e.target.value })} style={inputStyle}>
+                                      <option value="">Wer? (automatisch)</option>
+                                      <option value="anke">Anke</option>
+                                      <option value="holger">Holger</option>
+                                      <option value="mahnlauf">Mahnlauf</option>
+                                    </select>
+                                    <input type="date" value={aufgabe.wiedervorlage} onChange={e => setAufgabe({ ...aufgabe, wiedervorlage: e.target.value })} title="Wann ist die nächste Aktion fällig?" style={inputStyle} />
+                                    <input value={aufgabe.naechster_schritt} onChange={e => setAufgabe({ ...aufgabe, naechster_schritt: e.target.value })} placeholder="Was ist zu tun? (z. B. erneut anrufen, Beleg prüfen)" style={{ ...inputStyle, gridColumn: '1 / -1' }} />
+                                    <select value={aufgabe.kategorie} onChange={e => setAufgabe({ ...aufgabe, kategorie: e.target.value })} style={inputStyle}>
+                                      <option value="">Kategorie –</option>
+                                      {Object.entries(KATEGORIEN).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                                    </select>
+                                    <button disabled={busy} onClick={() => post({ aktion: 'aufgabe', rechnungsnummer: r.rechnungsnummer, zustaendig: aufgabe.zustaendig || null, wiedervorlage: aufgabe.wiedervorlage || null, naechster_schritt: aufgabe.naechster_schritt || null, kategorie: aufgabe.kategorie || null }, 'Nächste Aktion gespeichert ✓')} style={btnStyle('var(--accent2)', 'rgba(129,140,248,0.12)')}>Speichern</button>
+                                    {data?.rolle === 'admin' && (
+                                      <>
+                                        <textarea value={aufgabe.hinweise} onChange={e => setAufgabe({ ...aufgabe, hinweise: e.target.value })} placeholder="Telefonblatt: ZIEL: … EINSTIEG: … ACHTUNG: …" rows={4} style={{ ...inputStyle, gridColumn: '1 / -1', resize: 'vertical', fontFamily: 'inherit' }} />
+                                        <button disabled={busy} onClick={() => post({ aktion: 'aufgabe', rechnungsnummer: r.rechnungsnummer, hinweise: aufgabe.hinweise || null }, 'Telefonblatt gespeichert ✓')} style={{ ...btnStyle('#fbbf24', 'rgba(251,191,36,0.14)'), gridColumn: '1 / -1' }}>Telefonblatt speichern (nur Admin)</button>
+                                      </>
+                                    )}
+                                  </div>
+                                  <div style={{ fontWeight: 700, margin: '12px 0 6px', color: 'var(--text)' }}>Mahnsperre</div>
                                   <div style={{ color: 'var(--text-muted)', fontSize: 11, marginBottom: 6 }}>Solange ein Text eingetragen ist, legt der Mahnlauf keinen Entwurf an (z. B. „Ratenzahlung“, „wartet auf BAFA“, „Einwand – Holger“).</div>
                                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                                     <input value={sperreText} onChange={e => setSperreText(e.target.value)} placeholder="Grund (leer = keine Sperre)" style={{ ...inputStyle, flex: 2, minWidth: 160 }} />

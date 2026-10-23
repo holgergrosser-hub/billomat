@@ -22,7 +22,7 @@ footer{text-align:center;color:#94a3b8;font-size:11px;padding:20px}
 @media print{nav{display:none} .wrap{grid-template-columns:1fr} section{break-inside:avoid;border:none;padding:0 0 12px} header{background:#fff;color:#000} header p{color:#333}}
 </style></head>
 <body>
-<header><h1>Anleitung Forderungen und Mahnwesen</h1><p>QM-Dienstleistungen Grosser · Forderungsliste im Billomat-Dashboard · Stand 23.10.2026 · Bilder zeigen Beispieldaten</p></header>
+<header><h1>Anleitung Forderungen und Mahnwesen</h1><p>QM-Dienstleistungen Grosser · Forderungsliste im Billomat-Dashboard · Stand 23.10.2026 · Bilder zeigen Beispieldaten · Regeln und Kategorien aus der Telefonmappe</p></header>
 <div class="wrap">
 <nav><b>Inhalt</b><ol><li><a href="#ueberblick">Überblick</a></li><li><a href="#s1">1. Anmelden und Abmelden</a></li><li><a href="#s2">2. Die Liste lesen</a></li><li><a href="#s3">3. Dein Tagesablauf</a></li><li><a href="#s4">4. Notiz schreiben</a></li><li><a href="#s5">5. Mahnsperre setzen oder aufheben</a></li><li><a href="#s6">6. Kontakt oder Mahnung erfassen</a></li><li><a href="#s7">7. Mahnstufen und Fristen</a></li><li><a href="#s8">8. Regeln für jedes Gespräch</a></li><li><a href="#s9">9. Was an Holger geht</a></li><li><a href="#s10">10. Wenn etwas nicht geht</a></li></ol></nav>
 <main>
@@ -49,23 +49,25 @@ footer{text-align:center;color:#94a3b8;font-size:11px;padding:20px}
 <p>Oben rechts steht „Abmelden (Mahnkraft)“ – damit wird das Token aus dem Browser gelöscht. Auf einem fremden oder geteilten Rechner immer abmelden.</p>
 <p>Das Token ist persönlich. Nicht weitergeben, nicht in Mails schreiben. Geht es verloren, bekommst du von Holger ein neues; das alte wird dann ungültig.</p><figure><img src="01-anmelden.png" alt="Anmeldemaske"><figcaption>Anmeldemaske: (1) Token eintragen, (2) „Anmelden“, (3) „? Hilfe“ öffnet diese Anleitung.</figcaption></figure></section>
 <section id="s2"><h2>2. Die Liste lesen</h2><p>Die Liste ist ein Spiegel der offenen Rechnungen aus Billomat. Sie wird jeden Morgen um 06:20 Uhr automatisch abgeglichen; bezahlte Rechnungen verschwinden von selbst. Mit „⇅ Jetzt mit Billomat abgleichen“ kannst du den Abgleich jederzeit selbst anstoßen (dauert ein paar Sekunden).</p>
-<p>Spalten: RE = Rechnungsnummer mit Rechnungs- und Fälligkeitsdatum · Kunde = Firma, Kundennummer, Ansprechpartner · Kontakt = E-Mail und Telefon/Mobil · Offen = Restbetrag (bei Teilzahlung steht der ursprüngliche Betrag darunter) · Tage = Tage seit Fälligkeit (gelb ab 5, rot ab 28) · Gesendet = höchste bereits verschickte Mahnstufe mit Datum, darunter ggf. „Entwurf“, wenn eine Mahnung vorbereitet, aber noch nicht gesendet ist · Nächste Aktion = was das System als Nächstes vorsieht · Letzte Notiz = jüngster Eintrag aus den Gesprächen.</p>
+<p>Oben unter „WER IST DRAN“ stehen Knöpfe für Alle, Anke, Holger und Mahnlauf mit der Zahl „heute fällig / gesamt“. Mit dem Mahn-Token ist „Anke“ schon vorausgewählt – du siehst nur, was du tun musst, sortiert nach Fälligkeit (älteste zuerst). „nur heute fällig“ blendet alles aus, was erst später dran ist.</p>
+<p>Spalten: RE = Rechnungsnummer mit Rechnungs- und Fälligkeitsdatum · Kunde = Firma, Kundennummer, Ansprechpartner · Kontakt = E-Mail und Telefon/Mobil · Offen = Restbetrag (bei Teilzahlung steht der ursprüngliche Betrag darunter) · Tage = Tage seit Fälligkeit (gelb ab 5, rot ab 28) · Gesendet = höchste bereits verschickte Mahnstufe mit Datum, darunter ggf. „Entwurf“ · Wer · Wann · Was = wer die nächste Aktion macht (Anke/Holger/Mahnlauf), ab wann sie fällig ist („heute“ gelb, „seit …“ rot = überfällig, „ab …“ = später) und was genau zu tun ist; darunter klein der Mahnstand des Systems · Letzte Notiz = jüngster Eintrag aus den Gesprächen.</p>
 <p>„Nächste Aktion“ bedeutet: „Zahlungserinnerung/1. Mahnung/2. Mahnung senden“ = Mahnung ist fällig, der Entwurf liegt (ab dem nächsten Morgen) im Postfach · „… abwarten“ = Mahnung ist raus, Frist läuft noch · „Entwurf … liegt bereits in Gmail“ = bitte diesen Entwurf prüfen und senden · „Nicht mahnen: …“ = Mahnsperre, Grund steht dahinter · „Entscheidung: Inkasso/Mahnbescheid oder anrufen“ = alle Mahnstufen durch, Holger entscheidet · „E-Mail-Adresse fehlt in Billomat“ = Holger muss die Adresse in Billomat nachtragen.</p>
 <p>Das Häkchen „nur überfällige“ blendet Rechnungen aus, die noch nicht fällig sind. Die Suche findet Rechnungsnummer, Kunde, Kundennummer, E-Mail und Ansprechpartner.</p><figure>
 <img src="02-liste.png" alt="Forderungsliste mit nummerierten Markierungen">
 <figcaption>Die Forderungsliste (Beispieldaten). Nummern siehe Legende.</figcaption>
 </figure>
 <ol class="legende">
-<li><b>Abmelden</b> – löscht das Token aus dem Browser. Daneben „? Hilfe“.</li>
+<li><b>? Hilfe / Abmelden</b> – Anleitung öffnen; Abmelden löscht das Token aus dem Browser.</li>
 <li><b>Laden</b> – Liste neu aus der Datenbank holen.</li>
 <li><b>Jetzt mit Billomat abgleichen</b> – holt den aktuellen Stand aus Billomat (bezahlte Rechnungen verschwinden).</li>
 <li><b>Suche</b> – Rechnungsnummer, Kunde, Kundennummer, E-Mail, Ansprechpartner.</li>
-<li><b>nur überfällige</b> – Haken weg, dann erscheinen auch noch nicht fällige Rechnungen.</li>
+<li><b>nur überfällige</b> – wirkt in der Ansicht „Alle“.</li>
 <li><b>Tage</b> – Tage seit Fälligkeit: gelb ab 5, rot ab 28.</li>
-<li><b>Gesendet</b> – höchste verschickte Mahnstufe mit Datum; „Entwurf: …“ heißt: vorbereitet, noch nicht gesendet.</li>
-<li><b>Nächste Aktion</b> – was das System vorsieht (Erklärung unten).</li>
-<li><b>Details</b> – öffnet Mahnhistorie, Notizen, Sperre, Kontakt und das Erfassen-Formular.</li>
+<li><b>Gesendet</b> – höchste verschickte Mahnstufe mit Datum; „Entwurf: …“ heißt vorbereitet, nicht gesendet.</li>
+<li><b>Wer · Wann · Was</b> – wer dran ist, ab wann („heute“, rot „seit …“ = überfällig, „ab …“ = später), was zu tun ist; darunter klein der Mahnstand.</li>
+<li><b>Details</b> – Telefonblatt, Historie, Notizen, nächste Aktion, Sperre, Kontakt.</li>
 </ol>
+<p class="klein"><b>A</b> = „Wer ist dran“: Alle / Anke / Holger / Mahnlauf mit „heute fällig / gesamt“. Mit dem Mahn-Token ist Anke vorausgewählt. <b>R</b> = „Regeln für alle Gespräche“ und die Kategorien A–F zum Aufklappen.</p>
 <table class="akt">
 <tr><th>Nächste Aktion</th><th>Bedeutung</th><th>Du tust</th></tr>
 <tr><td><span class="b b-blau">Zahlungserinnerung / 1. Mahnung / 2. Mahnung senden</span></td><td>Mahnung ist fällig</td><td>Entwurf liegt ab dem nächsten Morgen im Postfach – prüfen, senden</td></tr>
@@ -76,22 +78,32 @@ footer{text-align:center;color:#94a3b8;font-size:11px;padding:20px}
 <tr><td><span class="b b-rot">E-Mail-Adresse fehlt in Billomat</span></td><td>keine Adresse hinterlegt</td><td>Adresse erfragen, Notiz „E-Mail in Billomat ändern auf …“</td></tr>
 </table></section>
 <section id="s3"><h2>3. Dein Tagesablauf</h2><p>Morgens: Im Postfach Mahnungen@iso9001.info liegen die vom Mahnlauf vorbereiteten Entwürfe (Betreff „Zahlungserinnerung – Rechnung RE…“, „1. Mahnung – …“, „2. Mahnung – …“). Jeden Entwurf kurz prüfen (richtiger Empfänger, Betrag stimmt mit der Liste überein) und senden. Du musst nichts eintragen – der Mahnlauf erkennt am nächsten Morgen, dass der Entwurf gesendet wurde.</p>
-<p>Dann die Liste öffnen und telefonieren, in dieser Reihenfolge: zuerst Kunden mit gebrochener Zusage (siehe Notizen), dann die mit „Entscheidung“ oder langer Überfälligkeit, zuletzt die frisch Erinnerten (frühestens 4–5 Tage nach der Zahlungserinnerung anrufen).</p>
+<p>Dann „Anke“ und „nur heute fällig“ wählen und die Liste von oben nach unten abarbeiten – die Reihenfolge ergibt sich aus der Wiedervorlage. Was erst „ab …“ fällig ist, bleibt liegen.</p>
 <p>Nach jedem Kontakt – auch nach einem erfolglosen Anrufversuch – sofort eine Notiz schreiben (Abschnitt 4) und den Kontakt erfassen (Abschnitt 6). Was nicht in der Liste steht, ist für Holger unsichtbar.</p>
-<p>Vor dem Anruf immer „▼ Details“ öffnen: Dort stehen Mahnhistorie und alle bisherigen Notizen. Wer zweimal eine Zusage gebrochen hat, bekommt keine dritte ohne konkretes Datum.</p></section>
-<section id="s4"><h2>4. Notiz schreiben</h2><p>„▼ Details“ öffnen, unten links „Neue Notiz“ ausfüllen, „Speichern“. Datum und dein Name (mahnkraft) werden automatisch ergänzt.</p>
-<p>In jede Notiz gehört: Wen erreicht (Name, Funktion) · Was wurde gesagt, möglichst wörtlich · Zahlung zugesagt bis (Datum) · Soll die Rechnung erneut gesendet werden, an welche Adresse · Muss Holger etwas entscheiden.</p>
+<p>Vor dem Anruf immer „▼ Details“ öffnen: Oben steht das Telefonblatt mit ZIEL DES ANRUFS, MÖGLICHEM EINSTIEG (wörtlich formuliert) und ACHTUNG (was schiefgehen kann), darunter Mahnhistorie und alle bisherigen Notizen. Wer zweimal eine Zusage gebrochen hat, bekommt keine dritte ohne konkretes Datum.</p>
+<p>Nach dem Gespräch legst du unter „Nächste Aktion festlegen“ fest, wer als Nächstes dran ist und wann (z. B. Anke, 30.10., „erneut anrufen“). Damit taucht der Fall genau an diesem Tag wieder oben auf – du musst dir nichts merken.</p></section>
+<section id="s4"><h2>4. Notiz schreiben</h2><p>„▼ Details“ öffnen, links unter „Notizen aus dem Gespräch“ die Felder ausfüllen (wie in der Telefonmappe): Erreicht am / mit wem · Was wurde gesagt (möglichst wörtlich) · Zahlung zugesagt bis (Datum) · Rechnung erneut senden an · An Holger geben, weil · Sonstiges. Leere Felder bleiben weg. „Notiz speichern“ – Datum und dein Name (mahnkraft) kommen automatisch dazu.</p>
+<p>Das System zieht daraus die Folgen: Bei „Zahlung zugesagt bis“ wird bis zu diesem Datum nicht gemahnt und der Fall am Folgetag wieder dir vorgelegt („Zahlungseingang prüfen“). Bei „An Holger geben, weil“ ist ab sofort Holger dran. Bei „Rechnung erneut senden an“ bekommt Holger die Aufgabe, die Rechnung zu schicken.</p>
 <p>Beispiel: „Fr. Zeck erreicht. Rest 1.033,83 € wird bis 30.10. überwiesen, Rechnung erneut an buchhaltung@waagen-zeck.de schicken.“ – Beispiel bei Nichterreichen: „Festnetz 2x, Mobil 1x versucht, Sprachbox, keine Nachricht hinterlassen.“</p>
 <p>Nicht in die Notiz: eigene Vermutungen oder Urteile über den Kunden. Nur was gesagt und vereinbart wurde.</p><figure>
 <img src="03-details.png" alt="Detailbereich einer Rechnung">
 <figcaption>Detailbereich nach Klick auf „▼ Details“ (Beispieldaten).</figcaption>
 </figure>
 <ol class="legende">
-<li><b>Neue Notiz</b> – nach jedem Kontakt ausfüllen, „Speichern“.</li>
+<li><b>Telefonblatt</b> – Ziel des Anrufs, möglicher Einstieg (wörtlich), Achtung. Vor jedem Anruf lesen.</li>
+<li><b>Notizen aus dem Gespräch</b> – Felder wie in der Telefonmappe; „Zahlung zugesagt bis“ setzt automatisch Sperre und Wiedervorlage.</li>
+<li><b>Nächste Aktion festlegen</b> – wer, wann, was, Kategorie. Der Fall erscheint am gewählten Tag wieder oben.</li>
 <li><b>Mahnsperre</b> – Grund und optional Datum, „Setzen“. Leeren und „Setzen“ hebt sie auf.</li>
-<li><b>Kontakt</b> – Telefon, Mobil, Anrede, Nachname ergänzen (nur in der Datenbank; E-Mail ändert Holger in Billomat).</li>
-<li><b>Kontakt / Mahnung erfassen</b> – Anrufe, eigene Mails, Briefe in die Mahnhistorie schreiben.</li>
-</ol></section>
+<li><b>Kontakt</b> – Telefon, Mobil, Anrede, Nachname (E-Mail ändert Holger in Billomat).</li>
+<li><b>Kontakt / Mahnung erfassen</b> – Anrufe, eigene Mails, Briefe in die Mahnhistorie.</li>
+</ol>
+<table class="akt"><tr><th>Kategorie</th><th>Bedeutung</th><th>Wer</th></tr>
+<tr><td>A</td><td>wartet auf BAFA-Zuschuss – kein Säumnisfall</td><td>Holger</td></tr>
+<tr><td>B</td><td>inhaltlicher Einwand (Leistung, Stunden, Preis)</td><td>nur Holger</td></tr>
+<tr><td>C</td><td>Rechnung hat den Kunden nicht erreicht</td><td>Anke: neu senden lassen</td></tr>
+<tr><td>D</td><td>keine Reaktion</td><td>Anke</td></tr>
+<tr><td>E</td><td>Lage ungeklärt (z. B. „schon bezahlt“)</td><td>Anke klärt, Holger entscheidet</td></tr>
+<tr><td>F</td><td>Aufschub zugesagt – nicht vor dem Datum anrufen</td><td>Anke nach Ablauf</td></tr></table></section>
 <section id="s5"><h2>5. Mahnsperre setzen oder aufheben</h2><p>Eine Mahnsperre verhindert, dass der Mahnlauf die nächste Mahnung vorbereitet. Setzen, wenn: der Kunde eine Zahlung zu einem konkreten Datum zugesagt hat · eine Ratenzahlung vereinbart ist (nur Holger darf das zusagen) · der Kunde auf eine BAFA-Auszahlung wartet · der Kunde die Rechnung bestreitet (Grund „Einwand – Holger“).</p>
 <p>Im Detailbereich rechts: Grund eintragen (z. B. „Zahlung zugesagt bis 30.10.“), optional ein Datum – bis dahin gilt die Sperre, danach läuft das Mahnwesen automatisch weiter. Ohne Datum gilt die Sperre, bis sie entfernt wird. Dann „Setzen“.</p>
 <p>Aufheben: Grund-Feld leeren, Datum leeren, „Setzen“. In der Liste erscheint die Sperre unter „Nächste Aktion“ als „Nicht mahnen: …“.</p></section>
