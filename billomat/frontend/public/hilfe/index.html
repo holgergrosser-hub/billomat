@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Anleitung Forderungen und Mahnwesen</title>
+<style>
+:root{--t:#0f172a;--d:#475569;--m:#64748b;--bg:#f8fafc;--w:#fff;--b:#e2e8f0;--a:#1d4ed8}
+*{box-sizing:border-box} body{margin:0;font:15px/1.6 Arial,Helvetica,sans-serif;color:var(--t);background:var(--bg)}
+header{background:#0b1020;color:#fff;padding:28px 24px} header h1{margin:0;font-size:24px;letter-spacing:-.3px} header p{margin:6px 0 0;color:#cbd5e1;font-size:13px}
+.wrap{display:grid;grid-template-columns:260px 1fr;gap:32px;max-width:1240px;margin:0 auto;padding:24px}
+nav{position:sticky;top:16px;align-self:start;background:var(--w);border:1px solid var(--b);border-radius:12px;padding:14px 16px;font-size:13px}
+nav b{display:block;margin-bottom:6px;color:var(--m);font-size:11px;letter-spacing:1.5px;text-transform:uppercase} nav ol{margin:0;padding-left:0;list-style:none} nav li{margin:4px 0} nav a{color:var(--a);text-decoration:none} nav a:hover{text-decoration:underline}
+main{min-width:0} section{background:var(--w);border:1px solid var(--b);border-radius:12px;padding:20px 24px;margin-bottom:18px}
+h2{margin:0 0 10px;font-size:18px} p{margin:0 0 10px;color:#1e293b} .klein{font-size:13px;color:var(--d)}
+figure{margin:14px 0} figure img{width:100%;height:auto;border:1px solid var(--b);border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,.08)} figcaption{font-size:12px;color:var(--m);margin-top:6px}
+ol.legende{margin:8px 0 14px;padding-left:0;list-style:none;counter-reset:n;font-size:14px} ol.legende li{counter-increment:n;position:relative;padding-left:36px;margin:5px 0}
+ol.legende li::before{content:counter(n);position:absolute;left:0;top:1px;width:24px;height:24px;border-radius:50%;background:#fbbf24;color:#111;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center}
+table.akt{width:100%;border-collapse:collapse;font-size:13.5px;margin:10px 0 14px} table.akt th,table.akt td{border:1px solid var(--b);padding:7px 10px;text-align:left;vertical-align:top} table.akt th{background:#f1f5f9}
+.b{display:inline-block;padding:2px 8px;border-radius:6px;font-size:12.5px;white-space:nowrap} .b-blau{background:#e0e7ff;color:#3730a3} .b-grau{background:#f1f5f9;color:#475569} .b-gelb{background:#fef3c7;color:#92400e} .b-rot{background:#fee2e2;color:#991b1b}
+.ablauf{width:100%;height:auto;margin:6px 0} .regel{border-left:4px solid #fbbf24;padding-left:12px}
+.hinweis{background:#fff7ed;border:1px solid #fdba74;border-radius:10px;padding:12px 14px;font-size:14px}
+footer{text-align:center;color:#94a3b8;font-size:11px;padding:20px}
+@media(max-width:900px){.wrap{grid-template-columns:1fr} nav{position:static}}
+@media print{nav{display:none} .wrap{grid-template-columns:1fr} section{break-inside:avoid;border:none;padding:0 0 12px} header{background:#fff;color:#000} header p{color:#333}}
+</style></head>
+<body>
+<header><h1>Anleitung Forderungen und Mahnwesen</h1><p>QM-Dienstleistungen Grosser · Forderungsliste im Billomat-Dashboard · Stand 23.10.2026 · Bilder zeigen Beispieldaten</p></header>
+<div class="wrap">
+<nav><b>Inhalt</b><ol><li><a href="#ueberblick">Überblick</a></li><li><a href="#s1">1. Anmelden und Abmelden</a></li><li><a href="#s2">2. Die Liste lesen</a></li><li><a href="#s3">3. Dein Tagesablauf</a></li><li><a href="#s4">4. Notiz schreiben</a></li><li><a href="#s5">5. Mahnsperre setzen oder aufheben</a></li><li><a href="#s6">6. Kontakt oder Mahnung erfassen</a></li><li><a href="#s7">7. Mahnstufen und Fristen</a></li><li><a href="#s8">8. Regeln für jedes Gespräch</a></li><li><a href="#s9">9. Was an Holger geht</a></li><li><a href="#s10">10. Wenn etwas nicht geht</a></li></ol></nav>
+<main>
+<section id="ueberblick"><h2>Überblick: So hängt alles zusammen</h2><svg viewBox="0 0 1000 300" class="ablauf" role="img" aria-label="Ablauf Mahnwesen">
+<defs><marker id="p" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 z" fill="#64748b"/></marker></defs>
+<g font-family="Arial" font-size="13">
+<rect x="20" y="40" width="170" height="70" rx="10" fill="#e0f2fe" stroke="#0284c7"/><text x="105" y="68" text-anchor="middle" font-weight="700">Billomat</text><text x="105" y="88" text-anchor="middle" fill="#334155" font-size="11.5">Rechnungen, Sparkasse</text>
+<rect x="255" y="40" width="180" height="70" rx="10" fill="#ede9fe" stroke="#7c3aed"/><text x="345" y="68" text-anchor="middle" font-weight="700">Datenbank</text><text x="345" y="88" text-anchor="middle" fill="#334155" font-size="11.5">offene Rechnungen, Mahnstand</text>
+<rect x="500" y="40" width="170" height="70" rx="10" fill="#dcfce7" stroke="#16a34a"/><text x="585" y="68" text-anchor="middle" font-weight="700">Mahnlauf 06:41</text><text x="585" y="88" text-anchor="middle" fill="#334155">legt Entwürfe an</text>
+<rect x="740" y="40" width="190" height="70" rx="10" fill="#fef3c7" stroke="#d97706"/><text x="835" y="68" text-anchor="middle" font-weight="700">Postfach Mahnungen@</text><text x="835" y="88" text-anchor="middle" fill="#334155">Entwürfe prüfen, senden</text>
+<rect x="260" y="190" width="410" height="70" rx="10" fill="#fff" stroke="#fbbf24" stroke-width="2"/><text x="465" y="218" text-anchor="middle" font-weight="700">Mahnkraft: Liste, Anrufe, Notizen, Sperren</text><text x="465" y="238" text-anchor="middle" fill="#334155">alles, was gesagt und vereinbart wurde, landet hier</text>
+<rect x="740" y="190" width="190" height="70" rx="10" fill="#fee2e2" stroke="#dc2626"/><text x="835" y="218" text-anchor="middle" font-weight="700">Holger</text><text x="835" y="238" text-anchor="middle" fill="#334155">Einwände, Raten, Inkasso</text>
+<line x1="190" y1="75" x2="258" y2="75" stroke="#64748b" stroke-width="2" marker-end="url(#p)"/><text x="224" y="62" text-anchor="middle" fill="#64748b" font-size="11">06:20</text>
+<line x1="430" y1="75" x2="498" y2="75" stroke="#64748b" stroke-width="2" marker-end="url(#p)"/>
+<line x1="670" y1="75" x2="738" y2="75" stroke="#64748b" stroke-width="2" marker-end="url(#p)"/>
+<line x1="835" y1="110" x2="835" y2="150" stroke="#64748b" stroke-width="2"/><line x1="835" y1="150" x2="660" y2="150" stroke="#64748b" stroke-width="2"/><line x1="660" y1="150" x2="660" y2="188" stroke="#64748b" stroke-width="2" marker-end="url(#p)"/>
+<line x1="345" y1="188" x2="345" y2="112" stroke="#64748b" stroke-width="2" marker-end="url(#p)"/><text x="358" y="150" fill="#64748b" font-size="11">Notizen, Sperren</text>
+<line x1="670" y1="225" x2="738" y2="225" stroke="#64748b" stroke-width="2" marker-end="url(#p)"/>
+</g></svg>
+<p class="klein">Zahlungen bucht Billomat über die Sparkasse-Anbindung selbst. Der Abgleich übernimmt jeden Morgen den Stand in die Datenbank; bezahlte Rechnungen verschwinden von selbst aus der Liste.</p>
+<div class="hinweis">Grundsatz: Was nicht in der Liste steht, ist für Holger unsichtbar. Nach jedem Kontakt eine Notiz – auch nach einem erfolglosen Anrufversuch. Bei Unklarheiten: notieren und an Holger geben, nie raten.</div></section>
+<section id="s1"><h2>1. Anmelden und Abmelden</h2><p>Adresse: https://billomat-umsatz.netlify.app/?view=forderungen – am besten als Lesezeichen speichern.</p>
+<p>Beim ersten Öffnen das Token eintragen, das du von Holger bekommen hast, und auf „Anmelden“ klicken. Der Browser merkt sich das Token; beim nächsten Mal landest du direkt in der Forderungsliste.</p>
+<p>Oben rechts steht „Abmelden (Mahnkraft)“ – damit wird das Token aus dem Browser gelöscht. Auf einem fremden oder geteilten Rechner immer abmelden.</p>
+<p>Das Token ist persönlich. Nicht weitergeben, nicht in Mails schreiben. Geht es verloren, bekommst du von Holger ein neues; das alte wird dann ungültig.</p><figure><img src="01-anmelden.png" alt="Anmeldemaske"><figcaption>Anmeldemaske: (1) Token eintragen, (2) „Anmelden“, (3) „? Hilfe“ öffnet diese Anleitung.</figcaption></figure></section>
+<section id="s2"><h2>2. Die Liste lesen</h2><p>Die Liste ist ein Spiegel der offenen Rechnungen aus Billomat. Sie wird jeden Morgen um 06:20 Uhr automatisch abgeglichen; bezahlte Rechnungen verschwinden von selbst. Mit „⇅ Jetzt mit Billomat abgleichen“ kannst du den Abgleich jederzeit selbst anstoßen (dauert ein paar Sekunden).</p>
+<p>Spalten: RE = Rechnungsnummer mit Rechnungs- und Fälligkeitsdatum · Kunde = Firma, Kundennummer, Ansprechpartner · Kontakt = E-Mail und Telefon/Mobil · Offen = Restbetrag (bei Teilzahlung steht der ursprüngliche Betrag darunter) · Tage = Tage seit Fälligkeit (gelb ab 5, rot ab 28) · Gesendet = höchste bereits verschickte Mahnstufe mit Datum, darunter ggf. „Entwurf“, wenn eine Mahnung vorbereitet, aber noch nicht gesendet ist · Nächste Aktion = was das System als Nächstes vorsieht · Letzte Notiz = jüngster Eintrag aus den Gesprächen.</p>
+<p>„Nächste Aktion“ bedeutet: „Zahlungserinnerung/1. Mahnung/2. Mahnung senden“ = Mahnung ist fällig, der Entwurf liegt (ab dem nächsten Morgen) im Postfach · „… abwarten“ = Mahnung ist raus, Frist läuft noch · „Entwurf … liegt bereits in Gmail“ = bitte diesen Entwurf prüfen und senden · „Nicht mahnen: …“ = Mahnsperre, Grund steht dahinter · „Entscheidung: Inkasso/Mahnbescheid oder anrufen“ = alle Mahnstufen durch, Holger entscheidet · „E-Mail-Adresse fehlt in Billomat“ = Holger muss die Adresse in Billomat nachtragen.</p>
+<p>Das Häkchen „nur überfällige“ blendet Rechnungen aus, die noch nicht fällig sind. Die Suche findet Rechnungsnummer, Kunde, Kundennummer, E-Mail und Ansprechpartner.</p><figure>
+<img src="02-liste.png" alt="Forderungsliste mit nummerierten Markierungen">
+<figcaption>Die Forderungsliste (Beispieldaten). Nummern siehe Legende.</figcaption>
+</figure>
+<ol class="legende">
+<li><b>Abmelden</b> – löscht das Token aus dem Browser. Daneben „? Hilfe“.</li>
+<li><b>Laden</b> – Liste neu aus der Datenbank holen.</li>
+<li><b>Jetzt mit Billomat abgleichen</b> – holt den aktuellen Stand aus Billomat (bezahlte Rechnungen verschwinden).</li>
+<li><b>Suche</b> – Rechnungsnummer, Kunde, Kundennummer, E-Mail, Ansprechpartner.</li>
+<li><b>nur überfällige</b> – Haken weg, dann erscheinen auch noch nicht fällige Rechnungen.</li>
+<li><b>Tage</b> – Tage seit Fälligkeit: gelb ab 5, rot ab 28.</li>
+<li><b>Gesendet</b> – höchste verschickte Mahnstufe mit Datum; „Entwurf: …“ heißt: vorbereitet, noch nicht gesendet.</li>
+<li><b>Nächste Aktion</b> – was das System vorsieht (Erklärung unten).</li>
+<li><b>Details</b> – öffnet Mahnhistorie, Notizen, Sperre, Kontakt und das Erfassen-Formular.</li>
+</ol>
+<table class="akt">
+<tr><th>Nächste Aktion</th><th>Bedeutung</th><th>Du tust</th></tr>
+<tr><td><span class="b b-blau">Zahlungserinnerung / 1. Mahnung / 2. Mahnung senden</span></td><td>Mahnung ist fällig</td><td>Entwurf liegt ab dem nächsten Morgen im Postfach – prüfen, senden</td></tr>
+<tr><td><span class="b b-grau">… abwarten</span></td><td>Mahnung ist raus, Frist läuft</td><td>nichts – außer der Kunde hat eine Zusage gebrochen</td></tr>
+<tr><td><span class="b b-gelb">Entwurf … liegt bereits in Gmail</span></td><td>vorbereitet, aber nicht gesendet</td><td>Entwurf im Postfach prüfen und senden</td></tr>
+<tr><td><span class="b b-gelb">Nicht mahnen: …</span></td><td>Mahnsperre mit Grund</td><td>nicht mahnen; ggf. nach Fristablauf anrufen</td></tr>
+<tr><td><span class="b b-rot">Entscheidung: Inkasso/Mahnbescheid oder anrufen</span></td><td>alle Stufen durch</td><td>Anrufen, Ergebnis notieren – Entscheidung trifft Holger</td></tr>
+<tr><td><span class="b b-rot">E-Mail-Adresse fehlt in Billomat</span></td><td>keine Adresse hinterlegt</td><td>Adresse erfragen, Notiz „E-Mail in Billomat ändern auf …“</td></tr>
+</table></section>
+<section id="s3"><h2>3. Dein Tagesablauf</h2><p>Morgens: Im Postfach Mahnungen@iso9001.info liegen die vom Mahnlauf vorbereiteten Entwürfe (Betreff „Zahlungserinnerung – Rechnung RE…“, „1. Mahnung – …“, „2. Mahnung – …“). Jeden Entwurf kurz prüfen (richtiger Empfänger, Betrag stimmt mit der Liste überein) und senden. Du musst nichts eintragen – der Mahnlauf erkennt am nächsten Morgen, dass der Entwurf gesendet wurde.</p>
+<p>Dann die Liste öffnen und telefonieren, in dieser Reihenfolge: zuerst Kunden mit gebrochener Zusage (siehe Notizen), dann die mit „Entscheidung“ oder langer Überfälligkeit, zuletzt die frisch Erinnerten (frühestens 4–5 Tage nach der Zahlungserinnerung anrufen).</p>
+<p>Nach jedem Kontakt – auch nach einem erfolglosen Anrufversuch – sofort eine Notiz schreiben (Abschnitt 4) und den Kontakt erfassen (Abschnitt 6). Was nicht in der Liste steht, ist für Holger unsichtbar.</p>
+<p>Vor dem Anruf immer „▼ Details“ öffnen: Dort stehen Mahnhistorie und alle bisherigen Notizen. Wer zweimal eine Zusage gebrochen hat, bekommt keine dritte ohne konkretes Datum.</p></section>
+<section id="s4"><h2>4. Notiz schreiben</h2><p>„▼ Details“ öffnen, unten links „Neue Notiz“ ausfüllen, „Speichern“. Datum und dein Name (mahnkraft) werden automatisch ergänzt.</p>
+<p>In jede Notiz gehört: Wen erreicht (Name, Funktion) · Was wurde gesagt, möglichst wörtlich · Zahlung zugesagt bis (Datum) · Soll die Rechnung erneut gesendet werden, an welche Adresse · Muss Holger etwas entscheiden.</p>
+<p>Beispiel: „Fr. Zeck erreicht. Rest 1.033,83 € wird bis 30.10. überwiesen, Rechnung erneut an buchhaltung@waagen-zeck.de schicken.“ – Beispiel bei Nichterreichen: „Festnetz 2x, Mobil 1x versucht, Sprachbox, keine Nachricht hinterlassen.“</p>
+<p>Nicht in die Notiz: eigene Vermutungen oder Urteile über den Kunden. Nur was gesagt und vereinbart wurde.</p><figure>
+<img src="03-details.png" alt="Detailbereich einer Rechnung">
+<figcaption>Detailbereich nach Klick auf „▼ Details“ (Beispieldaten).</figcaption>
+</figure>
+<ol class="legende">
+<li><b>Neue Notiz</b> – nach jedem Kontakt ausfüllen, „Speichern“.</li>
+<li><b>Mahnsperre</b> – Grund und optional Datum, „Setzen“. Leeren und „Setzen“ hebt sie auf.</li>
+<li><b>Kontakt</b> – Telefon, Mobil, Anrede, Nachname ergänzen (nur in der Datenbank; E-Mail ändert Holger in Billomat).</li>
+<li><b>Kontakt / Mahnung erfassen</b> – Anrufe, eigene Mails, Briefe in die Mahnhistorie schreiben.</li>
+</ol></section>
+<section id="s5"><h2>5. Mahnsperre setzen oder aufheben</h2><p>Eine Mahnsperre verhindert, dass der Mahnlauf die nächste Mahnung vorbereitet. Setzen, wenn: der Kunde eine Zahlung zu einem konkreten Datum zugesagt hat · eine Ratenzahlung vereinbart ist (nur Holger darf das zusagen) · der Kunde auf eine BAFA-Auszahlung wartet · der Kunde die Rechnung bestreitet (Grund „Einwand – Holger“).</p>
+<p>Im Detailbereich rechts: Grund eintragen (z. B. „Zahlung zugesagt bis 30.10.“), optional ein Datum – bis dahin gilt die Sperre, danach läuft das Mahnwesen automatisch weiter. Ohne Datum gilt die Sperre, bis sie entfernt wird. Dann „Setzen“.</p>
+<p>Aufheben: Grund-Feld leeren, Datum leeren, „Setzen“. In der Liste erscheint die Sperre unter „Nächste Aktion“ als „Nicht mahnen: …“.</p></section>
+<section id="s6"><h2>6. Kontakt oder Mahnung erfassen</h2><p>Im Detailbereich „Kontakt / Mahnung erfassen“: Stufe wählen (Anruf/Nachfrage, Zahlungserinnerung, 1. Mahnung, 2. Mahnung, letzte Frist), Kanal (Telefon, E-Mail, WhatsApp, Brief), Datum (vorbelegt mit heute), kurzer Vermerk, „Erfassen“. So landen auch Anrufe und selbst geschriebene Mails in der Mahnhistorie.</p>
+<p>Mahnungen, die aus den Entwürfen des Mahnlaufs gesendet wurden, musst du NICHT erfassen – die erkennt das System selbst. Erfassen nur, was du ohne Entwurf gemacht hast (Anruf, eigene Mail, Brief).</p>
+<p>„Kontakt (nur in der DB)“: Telefonnummern, Mobilnummer, Anrede und Nachname kannst du hier ergänzen – sie werden für die Liste und die Anrede in Mahnungen genutzt. Eine falsche oder fehlende E-Mail-Adresse kann nur Holger in Billomat korrigieren; dafür bitte eine Notiz „E-Mail in Billomat ändern auf …“ schreiben.</p></section>
+<section id="s7"><h2>7. Mahnstufen und Fristen</h2><p>Stufe 0 „Nachfrage“: freundliche Nachfrage oder Anruf, zählt nicht als Mahnung.</p>
+<p>Stufe 1 „Zahlungserinnerung“: ab 5 Tagen nach Fälligkeit, wenn noch nichts gesendet wurde.</p>
+<p>Stufe 2 „1. Mahnung“: ab 14 Tagen nach Fälligkeit und frühestens 9 Tage nach der Zahlungserinnerung, mit Frist heute + 7 Tage.</p>
+<p>Stufe 3 „2. Mahnung – letzte Zahlungsaufforderung“: ab 28 Tagen und frühestens 14 Tage nach der 1. Mahnung, mit Frist heute + 7 Tage.</p>
+<p>Stufe 4 „Letzte Frist“: nur durch Holger. 10 Tage nach der 2. Mahnung ohne Zahlung zeigt die Liste „Entscheidung: Inkasso/Mahnbescheid oder anrufen“ – ab hier keine weiteren Mails, der Fall geht an Holger.</p>
+<p>Antwortet ein Kunde auf eine Mahnung (Zahlung angekündigt, Reklamation, Ratenbitte), wird keine nächste Stufe vorbereitet, sondern der Fall als „Klären“ markiert. Dann: Notiz, ggf. Sperre, bei Einwand an Holger.</p><table class="akt">
+<tr><th>Stufe</th><th>Name</th><th>Wann</th><th>Frist</th></tr>
+<tr><td>0</td><td>Nachfrage / Anruf</td><td>jederzeit, zählt nicht als Mahnung</td><td>–</td></tr>
+<tr><td>1</td><td>Zahlungserinnerung</td><td>ab 5 Tagen nach Fälligkeit</td><td>„in den nächsten Tagen“</td></tr>
+<tr><td>2</td><td>1. Mahnung</td><td>ab 14 Tagen, frühestens 9 Tage nach Stufe 1</td><td>heute + 7 Tage</td></tr>
+<tr><td>3</td><td>2. Mahnung – letzte Zahlungsaufforderung</td><td>ab 28 Tagen, frühestens 14 Tage nach Stufe 2</td><td>heute + 7 Tage</td></tr>
+<tr><td>4</td><td>Letzte Frist / Entscheidung</td><td>10 Tage nach Stufe 3 ohne Zahlung</td><td>nur Holger</td></tr>
+</table></section>
+<section id="s8" class="regel"><h2>8. Regeln für jedes Gespräch</h2><p>Ziel ist immer ein konkretes Zahlungsdatum oder die Auskunft, was der Zahlung im Weg steht.</p>
+<p>Keine Nachlässe, keine Ratenzahlung, keine neue Frist zusagen – das entscheidet nur Holger. Vorschläge des Kunden notieren und weitergeben.</p>
+<p>Keine Aussagen zu Verzugszinsen, Mahnverfahren, Inkasso oder rechtlichen Schritten – auch nicht, wenn danach gefragt wird.</p>
+<p>Am Telefon niemals unsere Bankverbindung nennen oder bestätigen. Will ein Kunde die IBAN „nur abgleichen“ oder behauptet, er habe schon bezahlt: nach Datum, Betrag und Empfängerkonto fragen, um einen Überweisungsbeleg per Mail bitten, Notiz schreiben, an Holger. Nennt er ein Konto, das nicht unseres ist, Gespräch freundlich beenden und Holger sofort informieren.</p>
+<p>Bestreitet ein Kunde Leistung, Stunden oder Preis: nicht diskutieren, Wortlaut notieren, Sperre „Einwand – Holger“ setzen.</p>
+<p>Immer anbieten, die Rechnung erneut per Mail zu schicken, und die richtige Rechnungsadresse erfragen – viele Verzögerungen sind nur verlorene Mails.</p>
+<p>Freundlich bleiben. Die meisten Kunden sind Stammkunden, die wiederkommen sollen.</p></section>
+<section id="s9"><h2>9. Was an Holger geht</h2><p>Einwände gegen Rechnung, Stunden oder Preis · Bitten um Ratenzahlung, Nachlass oder längere Frist · „schon bezahlt“ mit Bitte um IBAN-Bestätigung · Fälle mit „Entscheidung: Inkasso“ · fehlende oder falsche E-Mail-Adresse in Billomat · Fragen zu BAFA/Fördermitteln, Zertifikaten oder Audits.</p>
+<p>Weitergabe immer über eine Notiz in der Liste (Holger sieht jede Notiz) – bei dringenden Dingen zusätzlich per WhatsApp/Telefon an Holger: +49 1579 2316673.</p></section>
+<section id="s10"><h2>10. Wenn etwas nicht geht</h2><p>„Token ungültig“: Token noch einmal genau eintragen (keine Leerzeichen). Bleibt es dabei, hat Holger den Zugang gesperrt oder erneuert – bei ihm melden.</p>
+<p>Liste leer oder „Laden“ bringt nichts: erst „⇅ Jetzt mit Billomat abgleichen“, dann „↻ Laden“. Kommt eine rote Fehlermeldung „Server not configured“ oder „Billomat GET failed“, liegt es an der Serverseite – Holger informieren.</p>
+<p>Ein Kunde ist in der Liste, hat aber laut eigener Aussage bezahlt: Abgleich anstoßen. Ist die Rechnung in Billomat als bezahlt gebucht, verschwindet sie. Wenn nicht: Notiz mit Datum und Betrag der angeblichen Zahlung, an Holger.</p>
+<p>Die Seite sieht alt aus oder es fehlen Knöpfe: Seite neu laden (Strg+F5).</p><figure><img src="04-hilfe.png" alt="Hilfefenster im Dashboard"><figcaption>Kurzfassung dieser Anleitung direkt im Dashboard über „? Hilfe“.</figcaption></figure></section>
+</main></div>
+<footer>Anleitung Forderungen und Mahnwesen · QM-Dienstleistungen Grosser · Stand 23.10.2026<br>Die Unterlagen wurden mit KI-Unterstützung erstellt. Die Inhalte werden durch den Projektleiter geprüft.</footer>
+</body></html>

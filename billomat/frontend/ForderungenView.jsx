@@ -127,7 +127,7 @@ export default function ForderungenView({ adminToken, setAdminToken, setStatus, 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <button onClick={load} disabled={loading || !adminToken} style={btnStyle('var(--accent)', 'rgba(110,231,183,0.1)')}>↻ Laden</button>
               <button onClick={syncNow} disabled={busy || !adminToken} style={btnStyle('var(--accent2)', 'rgba(129,140,248,0.12)')}>{busy ? '…' : '⇅ Jetzt mit Billomat abgleichen'}</button>
-              {onHilfe && <button onClick={onHilfe} style={btnStyle('#fbbf24', 'rgba(251,191,36,0.14)')}>? Hilfe / Anleitung</button>}
+              <a href="/hilfe/" target="_blank" rel="noopener" style={{ ...btnStyle('#fbbf24', 'rgba(251,191,36,0.14)'), textDecoration: 'none', display: 'inline-flex', alignItems: 'center' }}>? Hilfe / Anleitung mit Bildern</a>
             </div>
           </div>
           <div style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>

@@ -159,6 +159,9 @@ export default function HilfeView({ rolle, onClose }) {
             <button onClick={onClose} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'transparent', color: 'var(--text-dim)', fontSize: 12 }}>✕ Schließen</button>
           </div>
         </div>
+        <a href="/hilfe/" target="_blank" rel="noopener" style={{ display: 'inline-block', marginBottom: 12, padding: '8px 14px', borderRadius: 8, background: 'rgba(251,191,36,0.14)', border: '1px solid #fbbf24', color: '#fbbf24', fontSize: 12.5, textDecoration: 'none', fontWeight: 700 }}>
+          📖 Ausführliche Anleitung mit Bildern öffnen (neuer Tab)
+        </a>
         <div style={{ color: 'var(--text-muted)', fontSize: 11.5, marginBottom: 16, lineHeight: 1.6 }}>
           {tab === 'admin'
             ? 'Betriebsteil: Tokens, Abgleich, Mahnlauf, Datenbank. Stand 23.10.2026.'
