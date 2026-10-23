@@ -140,6 +140,28 @@ export default function ForderungenView({ adminToken, setAdminToken, setStatus, 
     }
   }
 
+  async function akteOeffnen(rechnungsnummer, intern) {
+    setError('')
+    const fenster = window.open('', '_blank')
+    if (fenster) fenster.document.write('<p style="font-family:Arial;padding:20px">Akte wird zusammengestellt (Rechnungen, Positionen, Zahlungen, Mahnungen, Notizen) …</p>')
+    try {
+      const url = new URL('/.netlify/functions/billomat-akte', window.location.origin)
+      url.searchParams.set('rechnungsnummer', rechnungsnummer)
+      if (intern) url.searchParams.set('intern', '1')
+      const res = await fetch(url, { headers: { 'x-admin-token': adminToken } })
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}))
+        throw new Error(body?.error || `HTTP ${res.status}`)
+      }
+      const html = await res.text()
+      if (fenster) { fenster.document.open(); fenster.document.write(html); fenster.document.close() }
+      setStatus(`Akte ${rechnungsnummer} geöffnet – dort „Drucken / als PDF speichern“ ✓`)
+    } catch (e) {
+      if (fenster) fenster.close()
+      setError(`Akte konnte nicht erstellt werden: ${e.message}`)
+    }
+  }
+
   async function post(payload, okText) {
     setBusy(true); setError('')
     try {
@@ -348,6 +370,13 @@ export default function ForderungenView({ adminToken, setAdminToken, setStatus, 
                         {isOpen && (
                           <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.08)', background: 'rgba(255,255,255,0.02)' }}>
                             <td colSpan={9} style={{ padding: '8px 12px 16px' }}>
+                              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', margin: '4px 0 12px' }}>
+                                <button type="button" onClick={() => akteOeffnen(r.rechnungsnummer, false)} style={btnStyle('var(--accent2)', 'rgba(167,139,250,0.14)')}>📁 Akte für Inkasso / Mahnbescheid</button>
+                                {data?.rolle === 'admin' && (
+                                  <button type="button" onClick={() => akteOeffnen(r.rechnungsnummer, true)} style={btnStyle('var(--text-dim)', 'transparent')}>Akte mit internen Hinweisen</button>
+                                )}
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Komplette Akte des Kunden: alle Rechnungen, Positionen, Zahlungen, Mahnungen, Kontakte, Zusagen – zum Drucken / als PDF speichern.</span>
+                              </div>
                               {(() => {
                                 const h = teileHinweise(r.hinweise)
                                 if (!Object.keys(h).length) return null

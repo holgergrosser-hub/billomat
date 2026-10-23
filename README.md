@@ -50,6 +50,7 @@ Das Dashboard verlangt beim Öffnen ein Token: Admin-Token → komplettes Dashbo
 
 - `/.netlify/functions/billomat-sync` – Scheduled Function, täglich 04:20 UTC (`netlify.toml`); nicht per HTTP erreichbar
 - `/.netlify/functions/billomat-sync-now` – Abgleich sofort (GET, Header `x-admin-token`: Admin- oder `FAELLIG_TOKEN`)
+- `/.netlify/functions/billomat-akte?rechnungsnummer=RE…` – Forderungsakte für Inkasso/Mahnbescheid als druckbare HTML-Seite (alle Rechnungen des Kunden, Positionen und Anschrift live aus Billomat, Zahlungen, Mahnungen, Notizen). `&intern=1` (nur Admin) blendet interne Hinweise ein; `&pdf=<rechnung_id>` reicht das Original-PDF aus Billomat durch. Button „📁 Akte für Inkasso“ in den Details der Forderungsliste.
 - `/.netlify/functions/billomat-forderungen` – GET Liste inkl. Mahnstand und Vorschlag für die nächste Stufe (`?format=text`, `?detail=1`, `?alle=1`);
   POST `{aktion: 'mahnung'|'mahnung_status'|'notiz'|'sperre'|'kontakt'|'erledigt', …}` (Token wie oben, `erledigt` nur Admin)
 - Dashboard-Reiter „Forderungen“ liest diese Funktion; der frühere CSV-Buchen-Bereich ist entfallen

@@ -57,6 +57,7 @@ const H = {
       text: [
         'Im Detailbereich „Kontakt / Mahnung erfassen“: Stufe wählen (Anruf/Nachfrage, Zahlungserinnerung, 1. Mahnung, 2. Mahnung, letzte Frist), Kanal (Telefon, E-Mail, WhatsApp, Brief), Datum (vorbelegt mit heute), kurzer Vermerk, „Erfassen“. So landen auch Anrufe und selbst geschriebene Mails in der Mahnhistorie.',
         'Mahnungen, die aus den Entwürfen des Mahnlaufs gesendet wurden, musst du NICHT erfassen – die erkennt das System selbst. Erfassen nur, was du ohne Entwurf gemacht hast (Anruf, eigene Mail, Brief).',
+        'Akte für Inkasso auf Knopfdruck: In den Details „📁 Akte für Inkasso / Mahnbescheid“ klicken. Die komplette Akte des Kunden (Anschrift, alle Rechnungen mit Positionen und Summen, Zahlungen, Mahnstand, Chronologie aller Mahnungen und Kontakte, Zusagen und Einwände, Links zu Rechnungs-PDFs und Mahn-Mails) öffnet sich in einem neuen Fenster – dort „Drucken / als PDF speichern“. Die Akte ist nur so vollständig wie die Notizen und erfassten Kontakte. Ob ein Fall ans Inkasso geht, entscheidet Holger.',
         '„Kontakt (nur in der DB)“: Telefonnummern, Mobilnummer, Anrede und Nachname kannst du hier ergänzen – sie werden für die Liste und die Anrede in Mahnungen genutzt. Eine falsche oder fehlende E-Mail-Adresse kann nur Holger in Billomat korrigieren; dafür bitte eine Notiz „E-Mail in Billomat ändern auf …“ schreiben.'
       ]
     },
